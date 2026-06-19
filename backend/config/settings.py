@@ -62,6 +62,27 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 
+# ── WhatsApp Cloud API ────────────────────────────────────────────
+WHATSAPP_PHONE_NUMBER_ID = os.getenv('WHATSAPP_PHONE_NUMBER_ID', '')
+WHATSAPP_ACCESS_TOKEN    = os.getenv('WHATSAPP_ACCESS_TOKEN', '')
+WHATSAPP_APP_SECRET      = os.getenv('WHATSAPP_APP_SECRET', '')
+WHATSAPP_VERIFY_TOKEN    = os.getenv('WHATSAPP_VERIFY_TOKEN', '')
+WHATSAPP_META_APP_ID     = os.getenv('WHATSAPP_META_APP_ID', '')
+
+# ── Messenger ─────────────────────────────────────────────────────
+MESSENGER_PAGE_ID          = os.getenv('MESSENGER_PAGE_ID', '')
+MESSENGER_PAGE_ACCESS_TOKEN = os.getenv('MESSENGER_PAGE_ACCESS_TOKEN', '')
+MESSENGER_APP_SECRET       = os.getenv('MESSENGER_APP_SECRET', '')
+MESSENGER_VERIFY_TOKEN     = os.getenv('MESSENGER_VERIFY_TOKEN', '')
+MESSENGER_META_APP_ID      = os.getenv('MESSENGER_META_APP_ID', '')
+
+# ── Instagram ─────────────────────────────────────────────────────
+INSTAGRAM_ACCOUNT_ID    = os.getenv('INSTAGRAM_ACCOUNT_ID', '')
+INSTAGRAM_ACCESS_TOKEN  = os.getenv('INSTAGRAM_ACCESS_TOKEN', '')
+INSTAGRAM_APP_SECRET    = os.getenv('INSTAGRAM_APP_SECRET', '')
+INSTAGRAM_VERIFY_TOKEN  = os.getenv('INSTAGRAM_VERIFY_TOKEN', '')
+INSTAGRAM_META_APP_ID   = os.getenv('INSTAGRAM_META_APP_ID', '')
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',

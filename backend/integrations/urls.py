@@ -1,8 +1,12 @@
 from rest_framework.routers import DefaultRouter
+from django.urls import path
 from .views import IntegrationViewSet, QuoteViewSet
+from .webhooks import MetaWebhookView
 
 router = DefaultRouter()
 router.register('integrations', IntegrationViewSet)
 router.register('quotes', QuoteViewSet)
 
-urlpatterns = router.urls
+urlpatterns = router.urls + [
+    path('webhook/meta/', MetaWebhookView.as_view(), name='meta_webhook'),
+]
