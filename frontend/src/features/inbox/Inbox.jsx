@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { mockConversations, mockMessages } from '../../mocks/conversations'
-import { getConversations, getConversation } from '../../services/conversations'
+import { getConversations, getConversation, sendAgentMessage, toggleAiActive } from '../../services/conversations'
 import PageShell from '../../components/layout/PageShell'
 import ChannelBadge from '../../components/ui/ChannelBadge'
 import StatusBadge from '../../components/ui/StatusBadge'
@@ -82,7 +82,9 @@ export default function Inbox() {
   const [selected, setSelected] = useState(null)
   const [messages, setMessages] = useState([])
   const [filter, setFilter] = useState('all')
+  const [search, setSearch] = useState('')
   const [newMsg, setNewMsg] = useState('')
+  const [sendingMsg, setSendingMsg] = useState(false)
   const [loadingConvs, setLoadingConvs] = useState(true)
   const [loadingMsgs, setLoadingMsgs] = useState(false)
   const [error, setError] = useState('')
@@ -124,15 +126,42 @@ export default function Inbox() {
   useEffect(() => { if (selected) loadMessages(selected) }, [selected])
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
+  const handleSend = async () => {
+    const text = newMsg.trim()
+    if (!text || !selected || sendingMsg) return
+    setSendingMsg(true)
+    setNewMsg('')
+    try {
+      const msg = await sendAgentMessage(selected.id, text)
+      setMessages(ms => [...ms, msg])
+    } catch {
+      setNewMsg(text)
+    } finally {
+      setSendingMsg(false)
+    }
+  }
+
+  const handleToggleAi = async (conv) => {
+    try {
+      const updated = await toggleAiActive(conv.id, !conv.ai_active)
+      setConversations(cs => cs.map(c => c.id === updated.id ? { ...c, ai_active: updated.ai_active } : c))
+      if (selected?.id === updated.id) setSelected(s => ({ ...s, ai_active: updated.ai_active }))
+    } catch { /* silently ignore */ }
+  }
+
   const filters = [
     { key: 'all', label: 'Todos' },
     { key: 'active', label: 'Activos' },
     { key: 'human_takeover', label: 'Humano' },
   ]
 
-  const filtered = filter === 'all'
-    ? conversations
-    : conversations.filter(c => c.status === filter)
+  const filtered = conversations
+    .filter(c => filter === 'all' || c.status === filter)
+    .filter(c => {
+      if (!search) return true
+      const name = c.contact?.name ?? c.contact_name ?? ''
+      return name.toLowerCase().includes(search.toLowerCase())
+    })
 
   const selectedName = selected?.contact?.name ?? selected?.contact_name ?? ''
   const selectedChannelType = selected?.channel?.type ?? selected?.channel_type ?? 'whatsapp'
@@ -158,7 +187,7 @@ export default function Inbox() {
           </div>
           <div className="relative">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input placeholder="Buscar..."
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..."
               className="w-full pl-8 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400" />
           </div>
         </div>
@@ -215,8 +244,8 @@ export default function Inbox() {
               {selected.ai_active ? <Bot size={14} className="text-purple-500" /> : <User size={14} />}
               <span>{selected.ai_active ? 'IA activa' : 'Modo humano'}</span>
               {selected.ai_active
-                ? <ToggleRight size={22} className="text-purple-500 cursor-pointer" />
-                : <ToggleLeft size={22} className="text-gray-300 cursor-pointer" />}
+                ? <ToggleRight size={22} className="text-purple-500 cursor-pointer" onClick={() => handleToggleAi(selected)} />
+                : <ToggleLeft size={22} className="text-gray-300 cursor-pointer" onClick={() => handleToggleAi(selected)} />}
             </div>
           </div>
 
@@ -238,12 +267,12 @@ export default function Inbox() {
           <div className="bg-white border-t border-gray-100 px-4 py-3">
             <div className="flex items-center gap-2">
               <input value={newMsg} onChange={e => setNewMsg(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && newMsg.trim()) { setNewMsg('') } }}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSend() }}
                 placeholder="Escribe un mensaje..."
                 className="flex-1 px-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400" />
-              <button disabled={!newMsg.trim()}
+              <button onClick={handleSend} disabled={!newMsg.trim() || sendingMsg}
                 className="w-9 h-9 bg-blue-500 hover:bg-blue-600 disabled:opacity-40 rounded-xl flex items-center justify-center transition-colors">
-                <Send size={15} className="text-white" />
+                {sendingMsg ? <Loader size={14} className="text-white animate-spin" /> : <Send size={15} className="text-white" />}
               </button>
             </div>
           </div>

@@ -1,12 +1,14 @@
 import requests
-from django.conf import settings
 
 GRAPH_URL = "https://graph.facebook.com/v21.0"
 
 
-def send_text(to: str, body: str, reply_to_id: str = None) -> dict:
+def send_text(to: str, body: str, channel, reply_to_id: str = None) -> dict:
     """Send a WhatsApp text message via Cloud API."""
-    url = f"{GRAPH_URL}/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
+    creds = channel.credentials or {}
+    phone_id = creds["phone_number_id"]
+    token = creds["access_token"]
+    url = f"{GRAPH_URL}/{phone_id}/messages"
     payload = {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
@@ -21,7 +23,7 @@ def send_text(to: str, body: str, reply_to_id: str = None) -> dict:
         url,
         json=payload,
         headers={
-            "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         },
         timeout=10,
@@ -30,9 +32,12 @@ def send_text(to: str, body: str, reply_to_id: str = None) -> dict:
     return resp.json()
 
 
-def mark_as_read(message_id: str) -> None:
+def mark_as_read(message_id: str, channel) -> None:
     """Mark an incoming message as read (shows double blue check)."""
-    url = f"{GRAPH_URL}/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
+    creds = channel.credentials or {}
+    phone_id = creds["phone_number_id"]
+    token = creds["access_token"]
+    url = f"{GRAPH_URL}/{phone_id}/messages"
     requests.post(
         url,
         json={
@@ -40,6 +45,6 @@ def mark_as_read(message_id: str) -> None:
             "status": "read",
             "message_id": message_id,
         },
-        headers={"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}"},
+        headers={"Authorization": f"Bearer {token}"},
         timeout=10,
     )

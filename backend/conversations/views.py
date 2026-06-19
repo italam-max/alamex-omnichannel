@@ -80,6 +80,31 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ConversationSerializer
     permission_classes = [IsAuthenticated]
 
+    @action(detail=True, methods=['patch'], url_path='update')
+    def partial_update_conversation(self, request, pk=None):
+        """Allow toggling ai_active and updating status from the Inbox."""
+        conversation = self.get_object()
+        allowed_fields = {'ai_active', 'status'}
+        data = {k: v for k, v in request.data.items() if k in allowed_fields}
+        for field, value in data.items():
+            setattr(conversation, field, value)
+        conversation.save(update_fields=list(data.keys()))
+        return Response(ConversationSerializer(conversation).data)
+
+    @action(detail=True, methods=['post'], url_path='messages')
+    def create_message(self, request, pk=None):
+        """Send an agent message from the Inbox."""
+        conversation = self.get_object()
+        content = (request.data.get('content') or '').strip()
+        if not content:
+            return Response({'detail': 'content is required'}, status=status.HTTP_400_BAD_REQUEST)
+        msg = Message.objects.create(
+            conversation=conversation,
+            role='agent',
+            content=content,
+        )
+        return Response(MessageSerializer(msg).data, status=status.HTTP_201_CREATED)
+
 
 class MessageViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Message.objects.select_related('conversation').all()

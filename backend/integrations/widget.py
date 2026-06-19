@@ -58,6 +58,8 @@ class WidgetConfigView(APIView):
         creds = channel.credentials or {}
         origin = request.headers.get("Origin", "")
         allowed = creds.get("allowed_origins", [])
+        if isinstance(allowed, str):
+            allowed = [s.strip() for s in allowed.splitlines() if s.strip()]
         if allowed and origin and origin not in allowed:
             return Response({"error": "Origin not allowed"}, status=403)
 
@@ -103,6 +105,8 @@ class WidgetMessageView(APIView):
 
         origin = request.headers.get("Origin", "")
         allowed = (channel.credentials or {}).get("allowed_origins", [])
+        if isinstance(allowed, str):
+            allowed = [s.strip() for s in allowed.splitlines() if s.strip()]
         if allowed and origin and origin not in allowed:
             return Response({"error": "Origin not allowed"}, status=403)
 

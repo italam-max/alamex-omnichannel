@@ -94,12 +94,15 @@ def _get_or_create_conversation(channel: Channel, external_id: str, sender_name:
         channel=channel,
         defaults={"name": sender_name or external_id},
     )
-    conversation, _ = Conversation.objects.get_or_create(
+    conversation = Conversation.objects.filter(
         contact=contact,
         channel=channel,
         status__in=["active", "human_takeover"],
-        defaults={"status": "active", "ai_active": True},
-    )
+    ).order_by("-updated_at").first()
+    if not conversation:
+        conversation = Conversation.objects.create(
+            contact=contact, channel=channel, status="active", ai_active=True
+        )
     return conversation, contact
 
 
