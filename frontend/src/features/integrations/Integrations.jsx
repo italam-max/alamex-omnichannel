@@ -363,6 +363,11 @@ export default function Integrations() {
 
   useEffect(() => { load() }, [])
 
+  const showError = (msg) => {
+    setApiError(msg)
+    setTimeout(() => setApiError(''), 5000)
+  }
+
   const handleSave = async (updated) => {
     try {
       const saved = await updateChannel(updated.id, {
@@ -373,13 +378,13 @@ export default function Integrations() {
       setChannels(cs => cs.map(c => c.id === saved.id ? saved : c))
       setEditing(null)
     } catch (e) {
-      alert('Error al guardar: ' + (e.response?.data?.detail || e.message))
+      showError('Error al guardar: ' + (e.response?.data?.detail || e.message))
     }
   }
 
   const handleAdd = async ({ type, name }) => {
     const defaultCreds = type === 'website'
-      ? { widget_key: 'web_' + Math.random().toString(36).slice(2) + Date.now().toString(36), accent_color: '#e7a518', header_title: 'Chatea con nosotros', launcher_position: 'bottom-right' }
+      ? { accent_color: '#e7a518', header_title: 'Chatea con nosotros', launcher_position: 'bottom-right' }
       : {}
     try {
       const created = await createChannel({ name, type, is_active: false, credentials: defaultCreds })
@@ -387,7 +392,7 @@ export default function Integrations() {
       setAdding(false)
       setEditing(created)
     } catch (e) {
-      alert('Error al crear canal: ' + (e.response?.data?.detail || e.message))
+      showError('Error al crear canal: ' + (e.response?.data?.detail || e.message))
     }
   }
 
@@ -395,8 +400,8 @@ export default function Integrations() {
     try {
       const updated = await updateChannel(ch.id, { is_active: !ch.is_active })
       setChannels(cs => cs.map(c => c.id === updated.id ? updated : c))
-    } catch {
-      alert('Error al cambiar estado del canal.')
+    } catch (e) {
+      showError('Error al cambiar estado: ' + (e.response?.data?.detail || e.message))
     }
   }
 
@@ -405,8 +410,8 @@ export default function Integrations() {
     try {
       await deleteChannel(ch.id)
       setChannels(cs => cs.filter(c => c.id !== ch.id))
-    } catch {
-      alert('Error al eliminar el canal.')
+    } catch (e) {
+      showError('Error al eliminar: ' + (e.response?.data?.detail || e.message))
     }
   }
 

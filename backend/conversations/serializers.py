@@ -1,3 +1,4 @@
+import secrets
 from rest_framework import serializers
 from .models import Channel, Contact, Conversation, Message
 
@@ -27,6 +28,14 @@ class ChannelSerializer(serializers.ModelSerializer):
                 masked[key] = value
         rep['credentials'] = masked
         return rep
+
+    def create(self, validated_data):
+        creds = validated_data.get('credentials', {})
+        # Auto-generate widget_key for website channels if not provided
+        if validated_data.get('type') == 'website' and not creds.get('widget_key'):
+            creds['widget_key'] = 'web_' + secrets.token_hex(20)
+            validated_data['credentials'] = creds
+        return super().create(validated_data)
 
     def update(self, instance, validated_data):
         incoming_creds = validated_data.pop('credentials', {})
