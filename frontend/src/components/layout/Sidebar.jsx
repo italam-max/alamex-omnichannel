@@ -1,15 +1,17 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import {
   MessageSquare, LayoutDashboard, Users, BookOpen,
-  Plug, ChevronRight, Bot
+  Plug, ChevronRight, Bot, Globe, LogOut
 } from 'lucide-react'
+import { useAuth } from '../../store/auth'
 
 const nav = [
   { to: '/', icon: LayoutDashboard, label: 'Overview' },
   { to: '/inbox', icon: MessageSquare, label: 'Inbox' },
   { to: '/leads', icon: Users, label: 'Leads' },
   { to: '/knowledge', icon: BookOpen, label: 'Conocimiento' },
-  { to: '/integrations', icon: Plug, label: 'Integraciones' },
+  { to: '/integrations', icon: Plug, label: 'Canales' },
+  { to: '/widget-test', icon: Globe, label: 'Prueba Widget' },
 ]
 
 export default function Sidebar() {
@@ -51,7 +53,8 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="p-3 border-t border-white/10">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/8 cursor-pointer transition-colors">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/8 cursor-pointer transition-colors group"
+          onClick={() => useAuth.getState().logout()}>
           <div className="w-7 h-7 rounded-full bg-blue-500/30 flex items-center justify-center text-blue-300 text-xs font-semibold">
             A
           </div>
@@ -59,7 +62,7 @@ export default function Sidebar() {
             <p className="text-white text-xs font-medium truncate">Admin</p>
             <p className="text-white/40 text-[11px] truncate">italam@alam.mx</p>
           </div>
-          <ChevronRight size={14} className="text-white/30" />
+          <LogOut size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
         </div>
       </div>
     </aside>

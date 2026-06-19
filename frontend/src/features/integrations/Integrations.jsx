@@ -28,15 +28,23 @@ const CHANNEL_FIELDS = {
     { key: 'instagram_account_id', label: 'Instagram Account ID', placeholder: '17841408067010982', secret: false, help: 'Meta Business settings → Linked accounts, o Graph API' },
     { key: 'meta_app_id',          label: 'Meta App ID',          placeholder: '1028723836244861', secret: false, help: 'Meta → tu App → App settings → Basic' },
     { key: 'access_token',         label: 'Access Token',         placeholder: 'IGAANxxxxx',        secret: true,  help: 'App → Instagram → API setup → Generate token' },
-    { key: 'app_secret',           label: 'App Secret',           placeholder: 'd085xxxxx',         secret: true,  help: 'Meta → tu App → App settings → Basic → App secret' },
-    { key: 'verify_token',         label: 'Verify Token',         placeholder: 'tu-token-secreto',  secret: true,  help: 'Palabra clave que tú eliges' },
+  ],
+  website: [
+    { key: 'widget_key',        label: 'Widget Key (auto)',     placeholder: 'web_xxxx',              secret: false, readonly: true, help: 'Generado automáticamente — pégalo en tu sitio web' },
+    { key: 'allowed_origins',   label: 'Dominios permitidos',  placeholder: 'https://www.alam.mx',   secret: false, textarea: true, help: 'Un dominio por línea. Ej: https://www.alam.mx' },
+    { key: 'header_title',      label: 'Título del chat',      placeholder: 'Chatea con nosotros',   secret: false, help: 'Texto que aparece en la cabecera del widget' },
+    { key: 'accent_color',      label: 'Color de acento',      placeholder: '#e7a518',               secret: false, color: true, help: 'Color principal del botón y cabecera' },
+    { key: 'greeting_message',  label: 'Mensaje de bienvenida',placeholder: '¡Hola! ¿En qué puedo ayudarte?', secret: false, textarea: true, help: 'Primer mensaje que ve el visitante' },
+    { key: 'launcher_position', label: 'Posición del botón',   placeholder: 'bottom-right',          secret: false, select: ['bottom-right', 'bottom-left'], help: 'Esquina donde aparece el botón flotante' },
+    { key: 'ai_instructions',   label: 'Instrucciones IA (solo web)', placeholder: 'Instrucciones adicionales...', secret: false, textarea: true, help: 'Contexto extra para el agente en el widget web' },
   ],
 }
 
 const CHANNEL_META = {
-  whatsapp:  { label: 'WhatsApp',  color: 'green', dot: 'bg-green-500' },
-  messenger: { label: 'Messenger', color: 'blue',  dot: 'bg-blue-500' },
-  instagram: { label: 'Instagram', color: 'pink',  dot: 'bg-pink-500' },
+  whatsapp:  { label: 'WhatsApp',       color: 'green',  dot: 'bg-green-500' },
+  messenger: { label: 'Messenger',      color: 'blue',   dot: 'bg-blue-500' },
+  instagram: { label: 'Instagram',      color: 'pink',   dot: 'bg-pink-500' },
+  website:   { label: 'Website Widget', color: 'amber',  dot: 'bg-amber-500' },
 }
 
 // ── Mock state (replace with API calls when backend is live) ──────
@@ -124,9 +132,26 @@ function ChannelModal({ channel, onSave, onClose }) {
             </div>
           </div>
 
+          {/* Embed snippet for website widget */}
+          {channel.type === 'website' && creds.widget_key && (
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">Código para tu sitio web</label>
+              <div className="flex items-start gap-2 bg-gray-900 rounded-lg px-3 py-2.5">
+                <code className="text-xs text-green-400 flex-1 break-all">
+                  {`<script src="${window.location.protocol}//${window.location.hostname}:8000/widget.js" data-key="${creds.widget_key}" defer></script>`}
+                </code>
+                <button onClick={() => navigator.clipboard.writeText(`<script src="${window.location.protocol}//${window.location.hostname}:8000/widget.js" data-key="${creds.widget_key}" defer></script>`)}
+                  className="text-[11px] text-blue-400 hover:text-blue-300 font-medium flex-shrink-0">Copiar</button>
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">Pega este código antes de <code className="bg-gray-100 px-1 rounded">&lt;/body&gt;</code> en tu sitio web.</p>
+            </div>
+          )}
+
           {/* Credential fields */}
           <div className="space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Credenciales</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              {channel.type === 'website' ? 'Configuración' : 'Credenciales'}
+            </p>
             {fields.map(f => (
               <div key={f.key}>
                 <label className="text-xs font-medium text-gray-600 block mb-1">{f.label}</label>
@@ -136,6 +161,36 @@ function ChannelModal({ channel, onSave, onClose }) {
                     onChange={v => setCreds(c => ({ ...c, [f.key]: v }))}
                     placeholder={f.placeholder}
                   />
+                ) : f.textarea ? (
+                  <textarea
+                    value={creds[f.key] || ''}
+                    onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
+                    placeholder={f.placeholder}
+                    rows={3}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 resize-none"
+                  />
+                ) : f.color ? (
+                  <div className="flex items-center gap-2">
+                    <input type="color" value={creds[f.key] || '#e7a518'}
+                      onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
+                      className="w-10 h-9 rounded border border-gray-200 cursor-pointer p-0.5" />
+                    <input value={creds[f.key] || '#e7a518'}
+                      onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
+                      placeholder={f.placeholder}
+                      className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-mono" />
+                  </div>
+                ) : f.select ? (
+                  <select value={creds[f.key] || f.select[0]}
+                    onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400">
+                    {f.select.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                ) : f.readonly ? (
+                  <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                    <code className="text-xs text-gray-600 flex-1 truncate">{creds[f.key] || '(se generará al guardar)'}</code>
+                    {creds[f.key] && <button onClick={() => navigator.clipboard.writeText(creds[f.key])}
+                      className="text-[11px] text-blue-500 hover:text-blue-700 font-medium flex-shrink-0">Copiar</button>}
+                  </div>
                 ) : (
                   <input
                     value={creds[f.key] || ''}
@@ -263,6 +318,7 @@ function AddChannelModal({ onAdd, onClose }) {
               <option value="whatsapp">WhatsApp</option>
               <option value="messenger">Messenger</option>
               <option value="instagram">Instagram</option>
+              <option value="website">Website Widget</option>
             </select>
           </div>
           <div>
@@ -297,7 +353,10 @@ export default function Integrations() {
   }
 
   const handleAdd = ({ type, name }) => {
-    const newCh = { id: nextId++, name, type, is_active: false, credentials: {} }
+    const defaultCreds = type === 'website'
+      ? { widget_key: 'web_' + Math.random().toString(36).slice(2) + Date.now().toString(36), accent_color: '#e7a518', header_title: 'Chatea con nosotros', launcher_position: 'bottom-right' }
+      : {}
+    const newCh = { id: nextId++, name, type, is_active: false, credentials: defaultCreds }
     setChannels(cs => [...cs, newCh])
     setAdding(false)
     setEditing(newCh)

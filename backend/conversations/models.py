@@ -6,6 +6,7 @@ class Channel(models.Model):
         ('whatsapp', 'WhatsApp'),
         ('messenger', 'Messenger'),
         ('instagram', 'Instagram'),
+        ('website', 'Website Widget'),
     ]
     name = models.CharField(max_length=100)
     type = models.CharField(max_length=20, choices=TYPE_CHOICES)
