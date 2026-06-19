@@ -12,7 +12,6 @@ from conversations.models import Channel, Contact, Conversation, Message
 
 logger = logging.getLogger(__name__)
 
-# Maps Meta's "object" field to our Channel.type value
 OBJECT_TO_CHANNEL_TYPE = {
     "whatsapp_business_account": "whatsapp",
     "page": "messenger",
@@ -23,8 +22,10 @@ OBJECT_TO_CHANNEL_TYPE = {
 # ── Signature verification ────────────────────────────────────────
 
 def _verify_signature(raw_body: bytes, sig_header: str, app_secret: str) -> bool:
+    """Strict HMAC-SHA256 check. Rejects if app_secret is not configured."""
     if not app_secret:
-        return True  # no secret configured → skip (useful during initial setup)
+        logger.warning("_verify_signature: no app_secret configured — rejecting request")
+        return False
     if not sig_header or not sig_header.startswith("sha256="):
         return False
     expected = "sha256=" + hmac.new(
@@ -33,50 +34,50 @@ def _verify_signature(raw_body: bytes, sig_header: str, app_secret: str) -> bool
     return hmac.compare_digest(expected, sig_header)
 
 
-# ── Channel lookup from DB ────────────────────────────────────────
+# ── Channel lookup via JSONField DB query (no table scan) ─────────
 
 def _find_channel_by_verify_token(verify_token: str, channel_type: str) -> Channel | None:
-    """Used during webhook verification (GET). Match by verify_token in credentials."""
-    for ch in Channel.objects.filter(type=channel_type, is_active=True):
-        if (ch.credentials or {}).get("verify_token") == verify_token:
-            return ch
-    return None
+    return Channel.objects.filter(
+        type=channel_type,
+        is_active=True,
+        credentials__verify_token=verify_token,
+    ).first()
 
 
 def _find_channel_whatsapp(payload: dict) -> Channel | None:
-    """Match WhatsApp channel by phone_number_id in the payload metadata."""
     try:
         phone_id = payload["entry"][0]["changes"][0]["value"]["metadata"]["phone_number_id"]
     except (KeyError, IndexError):
         return None
-    for ch in Channel.objects.filter(type="whatsapp", is_active=True):
-        if (ch.credentials or {}).get("phone_number_id") == phone_id:
-            return ch
-    return None
+    return Channel.objects.filter(
+        type="whatsapp",
+        is_active=True,
+        credentials__phone_number_id=phone_id,
+    ).first()
 
 
 def _find_channel_messenger(payload: dict) -> Channel | None:
-    """Match Messenger channel by page_id in entry."""
     try:
         page_id = payload["entry"][0]["id"]
     except (KeyError, IndexError):
         return None
-    for ch in Channel.objects.filter(type="messenger", is_active=True):
-        if (ch.credentials or {}).get("page_id") == page_id:
-            return ch
-    return None
+    return Channel.objects.filter(
+        type="messenger",
+        is_active=True,
+        credentials__page_id=page_id,
+    ).first()
 
 
 def _find_channel_instagram(payload: dict) -> Channel | None:
-    """Match Instagram channel by instagram_account_id in entry."""
     try:
         account_id = payload["entry"][0]["id"]
     except (KeyError, IndexError):
         return None
-    for ch in Channel.objects.filter(type="instagram", is_active=True):
-        if (ch.credentials or {}).get("instagram_account_id") == account_id:
-            return ch
-    return None
+    return Channel.objects.filter(
+        type="instagram",
+        is_active=True,
+        credentials__instagram_account_id=account_id,
+    ).first()
 
 
 CHANNEL_FINDERS = {
@@ -174,15 +175,10 @@ HANDLERS = {
 
 @method_decorator(csrf_exempt, name="dispatch")
 class MetaWebhookView(APIView):
-    """
-    Single endpoint for WhatsApp, Messenger and Instagram.
-    Credentials are read from Channel.credentials (DB), not from settings.
-    """
     authentication_classes = []
     permission_classes = []
 
     def get(self, request):
-        """Webhook verification — Meta sends this once when you register the webhook URL."""
         mode      = request.GET.get("hub.mode")
         token     = request.GET.get("hub.verify_token")
         challenge = request.GET.get("hub.challenge")
@@ -190,7 +186,6 @@ class MetaWebhookView(APIView):
         if mode != "subscribe" or not token:
             return HttpResponse("Forbidden", status=403)
 
-        # Search all active channels for one whose verify_token matches
         for ch_type in ("whatsapp", "messenger", "instagram"):
             channel = _find_channel_by_verify_token(token, ch_type)
             if channel:
@@ -201,7 +196,6 @@ class MetaWebhookView(APIView):
         return HttpResponse("Forbidden", status=403)
 
     def post(self, request):
-        """Receive signed events from Meta."""
         raw_body   = request.body
         sig_header = request.headers.get("X-Hub-Signature-256", "")
 
@@ -217,17 +211,21 @@ class MetaWebhookView(APIView):
             logger.warning("[Webhook] Unknown object type: %s", obj)
             return HttpResponse("OK", status=200)
 
-        # Find the specific channel from DB
         channel = CHANNEL_FINDERS[channel_type](payload)
         if not channel:
             logger.warning("[Webhook] No active %s channel found for this payload", channel_type)
             return HttpResponse("OK", status=200)
 
-        # Verify HMAC with THIS channel's app_secret
         app_secret = (channel.credentials or {}).get("app_secret", "")
         if not _verify_signature(raw_body, sig_header, app_secret):
             logger.warning("[Webhook] Signature mismatch for channel %s", channel.name)
             return HttpResponse("Forbidden", status=403)
 
-        HANDLERS[channel_type](payload, channel)
+        # Dispatch to Celery; fall back to sync if broker unavailable
+        try:
+            from .tasks import process_meta_webhook
+            process_meta_webhook.delay(channel.id, channel_type, payload)
+        except Exception:
+            HANDLERS[channel_type](payload, channel)
+
         return HttpResponse("OK", status=200)

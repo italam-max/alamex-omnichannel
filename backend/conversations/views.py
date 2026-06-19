@@ -12,7 +12,7 @@ GRAPH_URL = "https://graph.facebook.com/v21.0"
 
 
 class ChannelViewSet(viewsets.ModelViewSet):
-    queryset = Channel.objects.all()
+    queryset = Channel.objects.all().order_by('id')
     serializer_class = ChannelSerializer
     permission_classes = [IsAuthenticated]
 

@@ -4,15 +4,14 @@ import { Send, Bot, User, MessageSquare, X } from 'lucide-react'
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
-// Generates or retrieves a stable session ID for this browser
-function getSessionId() {
-  const key = 'alamex_widget_session'
-  let id = localStorage.getItem(key)
-  if (!id) {
-    id = Math.random().toString(36).slice(2) + Date.now().toString(36)
-    localStorage.setItem(key, id)
-  }
-  return id
+const SESSION_KEY = 'alamex_widget_session'
+
+function getStoredSessionId() {
+  return localStorage.getItem(SESSION_KEY) || ''
+}
+
+function storeSessionId(id) {
+  localStorage.setItem(SESSION_KEY, id)
 }
 
 function ChatBubble({ msg }) {
@@ -41,7 +40,7 @@ function LiveWidget({ widgetKey, config }) {
   const [visitorName, setVisitorName] = useState(localStorage.getItem('widget_name') || '')
   const [nameStep, setNameStep] = useState(!visitorName)
   const endRef = useRef(null)
-  const sessionId = getSessionId()
+  const [sessionId, setSessionId] = useState(getStoredSessionId)
   const accent = config?.accent_color || '#e7a518'
 
   useEffect(() => {
@@ -73,6 +72,11 @@ function LiveWidget({ widgetKey, config }) {
         body: JSON.stringify({ session_id: sessionId, visitor_name: visitorName, message: text }),
       })
       const data = await resp.json()
+      // Always use the server-returned session_id as the authoritative one
+      if (data.session_id) {
+        storeSessionId(data.session_id)
+        setSessionId(data.session_id)
+      }
       setMessages(ms => [...ms, { id: Date.now() + 1, role: 'ai', content: data.reply || '...' }])
     } catch {
       setMessages(ms => [...ms, { id: Date.now() + 1, role: 'ai', content: 'Error de conexión. Intenta de nuevo.' }])

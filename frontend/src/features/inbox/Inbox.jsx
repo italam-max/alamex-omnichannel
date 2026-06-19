@@ -123,6 +123,19 @@ export default function Inbox() {
   }
 
   useEffect(() => { loadConversations() }, [])
+
+  // Poll for new messages every 5s when a conversation is selected
+  useEffect(() => {
+    if (!selected || USE_MOCK) return
+    const interval = setInterval(async () => {
+      try {
+        const detail = await getConversation(selected.id)
+        setMessages(detail.messages ?? [])
+      } catch { /* silently ignore poll errors */ }
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [selected?.id])
+
   useEffect(() => { if (selected) loadMessages(selected) }, [selected])
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
