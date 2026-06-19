@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import PageShell from '../../components/layout/PageShell'
 import {
   CheckCircle, XCircle, ExternalLink, MessageSquare,
-  Settings, Eye, EyeOff, Loader, Plus, ToggleLeft, ToggleRight, Trash2
+  Settings, Eye, EyeOff, Loader, Plus, ToggleLeft, ToggleRight, Trash2, RefreshCw
 } from 'lucide-react'
+import { listChannels, createChannel, updateChannel, deleteChannel, testChannel } from '../../services/channels'
 
 const WEBHOOK_URL = `${window.location.protocol}//${window.location.hostname}:8000/api/integrations/webhook/meta/`
 
@@ -47,13 +48,6 @@ const CHANNEL_META = {
   website:   { label: 'Website Widget', color: 'amber',  dot: 'bg-amber-500' },
 }
 
-// ── Mock state (replace with API calls when backend is live) ──────
-
-const INITIAL_CHANNELS = [
-  { id: 1, name: 'WhatsApp Principal', type: 'whatsapp',  is_active: true,  credentials: { phone_number_id: '1119808294554235', meta_app_id: '1345579844136949', access_token: '••••••••', app_secret: '••••••••', verify_token: '••••••••' } },
-  { id: 2, name: 'Messenger Alamex',   type: 'messenger', is_active: true,  credentials: { page_id: '409937795710821', meta_app_id: '27291667697185733', page_access_token: '••••••••', app_secret: '••••••••', verify_token: '••••••••' } },
-  { id: 3, name: 'Instagram Alamex',   type: 'instagram', is_active: false, credentials: { instagram_account_id: '17841408067010982', meta_app_id: '1028723836244861', access_token: '••••••••', app_secret: '••••••••', verify_token: '••••••••' } },
-]
 
 // ── Secret field with toggle visibility ───────────────────────────
 
@@ -90,11 +84,17 @@ function ChannelModal({ channel, onSave, onClose }) {
   const [testResult, setTestResult] = useState(null)
 
   const handleTest = async () => {
+    if (!channel.id) return
     setTesting(true)
     setTestResult(null)
-    await new Promise(r => setTimeout(r, 1200)) // simulate API call
-    setTestResult({ ok: true, detail: 'Conexión exitosa con Meta Graph API' })
-    setTesting(false)
+    try {
+      const result = await testChannel(channel.id)
+      setTestResult(result)
+    } catch (e) {
+      setTestResult({ ok: false, detail: e.response?.data?.detail || 'Error de conexión' })
+    } finally {
+      setTesting(false)
+    }
   }
 
   return (
@@ -342,33 +342,72 @@ function AddChannelModal({ onAdd, onClose }) {
 // ── Main page ─────────────────────────────────────────────────────
 
 export default function Integrations() {
-  const [channels, setChannels] = useState(INITIAL_CHANNELS)
+  const [channels, setChannels] = useState([])
   const [editing, setEditing] = useState(null)
   const [adding, setAdding] = useState(false)
-  let nextId = Math.max(...channels.map(c => c.id), 0) + 1
+  const [loading, setLoading] = useState(true)
+  const [apiError, setApiError] = useState('')
 
-  const handleSave = (updated) => {
-    setChannels(cs => cs.map(c => c.id === updated.id ? updated : c))
-    setEditing(null)
+  const load = async () => {
+    setLoading(true)
+    setApiError('')
+    try {
+      const data = await listChannels()
+      setChannels(data)
+    } catch {
+      setApiError('No se pudo cargar los canales del servidor.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleAdd = ({ type, name }) => {
+  useEffect(() => { load() }, [])
+
+  const handleSave = async (updated) => {
+    try {
+      const saved = await updateChannel(updated.id, {
+        name: updated.name,
+        is_active: updated.is_active,
+        credentials: updated.credentials,
+      })
+      setChannels(cs => cs.map(c => c.id === saved.id ? saved : c))
+      setEditing(null)
+    } catch (e) {
+      alert('Error al guardar: ' + (e.response?.data?.detail || e.message))
+    }
+  }
+
+  const handleAdd = async ({ type, name }) => {
     const defaultCreds = type === 'website'
       ? { widget_key: 'web_' + Math.random().toString(36).slice(2) + Date.now().toString(36), accent_color: '#e7a518', header_title: 'Chatea con nosotros', launcher_position: 'bottom-right' }
       : {}
-    const newCh = { id: nextId++, name, type, is_active: false, credentials: defaultCreds }
-    setChannels(cs => [...cs, newCh])
-    setAdding(false)
-    setEditing(newCh)
+    try {
+      const created = await createChannel({ name, type, is_active: false, credentials: defaultCreds })
+      setChannels(cs => [...cs, created])
+      setAdding(false)
+      setEditing(created)
+    } catch (e) {
+      alert('Error al crear canal: ' + (e.response?.data?.detail || e.message))
+    }
   }
 
-  const handleToggle = (ch) => {
-    setChannels(cs => cs.map(c => c.id === ch.id ? { ...c, is_active: !c.is_active } : c))
+  const handleToggle = async (ch) => {
+    try {
+      const updated = await updateChannel(ch.id, { is_active: !ch.is_active })
+      setChannels(cs => cs.map(c => c.id === updated.id ? updated : c))
+    } catch {
+      alert('Error al cambiar estado del canal.')
+    }
   }
 
-  const handleDelete = (ch) => {
+  const handleDelete = async (ch) => {
     if (!window.confirm(`¿Eliminar el canal "${ch.name}"?`)) return
-    setChannels(cs => cs.filter(c => c.id !== ch.id))
+    try {
+      await deleteChannel(ch.id)
+      setChannels(cs => cs.filter(c => c.id !== ch.id))
+    } catch {
+      alert('Error al eliminar el canal.')
+    }
   }
 
   const active = channels.filter(c => c.is_active).length
@@ -380,6 +419,9 @@ export default function Integrations() {
         <div className="flex items-center gap-4 text-sm text-gray-500">
           <span><strong className="text-gray-800">{channels.length}</strong> canales</span>
           <span><strong className="text-emerald-600">{active}</strong> activos</span>
+          <button onClick={load} className="p-1 hover:bg-gray-100 rounded-lg text-gray-400 transition-colors">
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          </button>
         </div>
         <button onClick={() => setAdding(true)}
           className="flex items-center gap-1.5 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg transition-colors">
@@ -387,6 +429,10 @@ export default function Integrations() {
           Agregar canal
         </button>
       </div>
+
+      {apiError && (
+        <div className="mb-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">{apiError}</div>
+      )}
 
       {/* Webhook info banner */}
       <div className="mb-5 bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">
