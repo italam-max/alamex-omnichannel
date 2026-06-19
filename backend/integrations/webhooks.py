@@ -9,6 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 from rest_framework.views import APIView
 
 from conversations.models import Channel, Contact, Conversation, Message
+from .services.ai_agent import get_ai_response
 
 logger = logging.getLogger(__name__)
 
@@ -107,13 +108,42 @@ def _get_or_create_conversation(channel: Channel, external_id: str, sender_name:
     return conversation, contact
 
 
-def _save_message(conversation: Conversation, role: str, content: str) -> Message:
-    return Message.objects.create(conversation=conversation, role=role, content=content)
+def _save_message(conversation: Conversation, role: str, content: str, model_used: str = '') -> Message:
+    return Message.objects.create(
+        conversation=conversation, role=role, content=content, model_used=model_used
+    )
+
+
+def _run_ai_and_respond(channel: Channel, conversation: Conversation, incoming_text: str, reply_fn=None) -> None:
+    """Call AI agent, save response, optionally send back via channel API."""
+    if not conversation.ai_active:
+        return
+
+    reply, should_handoff = get_ai_response(channel, conversation, incoming_text)
+
+    if should_handoff:
+        conversation.status   = 'human_takeover'
+        conversation.ai_active = False
+        conversation.save(update_fields=['status', 'ai_active'])
+        logger.info('[AI] Conversation %s handed off to human', conversation.id)
+        return
+
+    if reply:
+        from conversations.models import Channel as Ch  # avoid circular at module level
+        creds = channel.credentials or {}
+        model = creds.get('ai_model', 'claude-haiku-4-5-20251001')
+        _save_message(conversation, 'ai', reply, model_used=model)
+        if reply_fn:
+            try:
+                reply_fn(reply)
+            except Exception as exc:
+                logger.error('[AI] Failed to send reply via channel API: %s', exc)
 
 
 # ── Per-channel message handlers ─────────────────────────────────
 
 def handle_whatsapp(payload: dict, channel: Channel) -> None:
+    from .services.whatsapp import send_text as wa_send
     for entry in payload.get("entry", []):
         for change in entry.get("changes", []):
             if change.get("field") != "messages":
@@ -123,18 +153,23 @@ def handle_whatsapp(payload: dict, channel: Channel) -> None:
                 if msg.get("type") != "text":
                     continue
                 sender = msg["from"]
-                text = msg["text"]["body"]
+                text   = msg["text"]["body"]
                 contacts = value.get("contacts", [])
                 name = contacts[0]["profile"]["name"] if contacts else sender
                 conv, _ = _get_or_create_conversation(channel, sender, name)
                 _save_message(conv, "customer", text)
                 logger.info("[WhatsApp][%s] %s: %s", channel.name, sender, text[:80])
+                _run_ai_and_respond(
+                    channel, conv, text,
+                    reply_fn=lambda reply: wa_send(sender, reply, channel),
+                )
             for st in value.get("statuses", []):
                 if st.get("status") == "failed":
                     logger.error("[WhatsApp][%s] Delivery failed: %s", channel.name, st.get("errors"))
 
 
 def handle_messenger(payload: dict, channel: Channel) -> None:
+    from .services.messenger import send_text as ms_send
     for entry in payload.get("entry", []):
         for event in entry.get("messaging", []):
             msg = event.get("message", {})
@@ -147,9 +182,14 @@ def handle_messenger(payload: dict, channel: Channel) -> None:
             conv, _ = _get_or_create_conversation(channel, sender_id)
             _save_message(conv, "customer", text)
             logger.info("[Messenger][%s] %s: %s", channel.name, sender_id, text[:80])
+            _run_ai_and_respond(
+                channel, conv, text,
+                reply_fn=lambda reply: ms_send(sender_id, reply, channel),
+            )
 
 
 def handle_instagram(payload: dict, channel: Channel) -> None:
+    from .services.instagram import send_text as ig_send
     for entry in payload.get("entry", []):
         for event in entry.get("messaging", []):
             msg = event.get("message", {})
@@ -162,6 +202,10 @@ def handle_instagram(payload: dict, channel: Channel) -> None:
             conv, _ = _get_or_create_conversation(channel, sender_igsid)
             _save_message(conv, "customer", text)
             logger.info("[Instagram][%s] %s: %s", channel.name, sender_igsid, text[:80])
+            _run_ai_and_respond(
+                channel, conv, text,
+                reply_fn=lambda reply: ig_send(sender_igsid, reply, channel),
+            )
 
 
 HANDLERS = {

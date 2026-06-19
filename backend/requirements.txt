@@ -19,6 +19,9 @@ redis==5.3.0
 # HTTP client (Meta Graph API calls)
 requests==2.34.2
 
+# AI agent
+anthropic==0.111.0
+
 # Utilities
 asgiref==3.11.1
 PyJWT==2.13.0

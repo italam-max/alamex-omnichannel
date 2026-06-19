@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 
 from conversations.models import Channel, Contact, Conversation, Message
+from .services.ai_agent import get_ai_response
 
 logger = logging.getLogger(__name__)
 
@@ -158,13 +159,25 @@ class WidgetMessageView(APIView):
         conversation = _get_or_create_widget_conversation(contact, channel)
         Message.objects.create(conversation=conversation, role="customer", content=text)
 
-        # Placeholder — real AI agent in next sprint
-        ai_reply = "Gracias por tu mensaje. Un agente te responderá pronto."
+        # AI agent (configured per channel) or fallback placeholder
+        ai_reply, should_handoff = get_ai_response(channel, conversation, text)
+
+        if should_handoff:
+            conversation.status    = 'human_takeover'
+            conversation.ai_active = False
+            conversation.save(update_fields=['status', 'ai_active'])
+            ai_reply = "Te estamos conectando con un agente humano. Un momento por favor."
+
+        if not ai_reply:
+            ai_reply = "Gracias por tu mensaje. Un agente te responderá pronto."
+
+        creds     = channel.credentials or {}
+        model_tag = creds.get('ai_model', 'placeholder') if creds.get('ai_enabled') else 'placeholder'
         ai_msg = Message.objects.create(
             conversation=conversation,
             role="ai",
             content=ai_reply,
-            model_used="placeholder",
+            model_used=model_tag,
         )
 
         resp = Response({
@@ -172,6 +185,7 @@ class WidgetMessageView(APIView):
             "session_id":      session_id,
             "conversation_id": conversation.id,
             "message_id":      ai_msg.id,
+            "handoff":         should_handoff,
         })
         resp["Access-Control-Allow-Origin"] = origin if origin else "*"
         return resp

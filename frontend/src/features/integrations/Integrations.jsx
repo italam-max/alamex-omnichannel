@@ -2,13 +2,23 @@ import { useState, useEffect } from 'react'
 import PageShell from '../../components/layout/PageShell'
 import {
   CheckCircle, XCircle, ExternalLink, MessageSquare,
-  Settings, Eye, EyeOff, Loader, Plus, ToggleLeft, ToggleRight, Trash2, RefreshCw
+  Settings, Eye, EyeOff, Loader, Plus, ToggleLeft, ToggleRight, Trash2, RefreshCw, Bot
 } from 'lucide-react'
 import { listChannels, createChannel, updateChannel, deleteChannel, testChannel } from '../../services/channels'
 
 const WEBHOOK_URL = `${window.location.protocol}//${window.location.hostname}:8000/api/integrations/webhook/meta/`
 
 // ── Field definitions per channel type ───────────────────────────
+
+const AI_FIELDS = [
+  { divider: true, label: 'Agente IA' },
+  { key: 'ai_enabled',           label: 'Activar agente IA',        boolean: true,  help: 'El asistente responde automáticamente con Claude' },
+  { key: 'ai_api_key',           label: 'Anthropic API Key',         placeholder: 'sk-ant-api03-...', secret: true, help: 'Tu llave de Anthropic — anthropic.com/account/keys' },
+  { key: 'ai_model',             label: 'Modelo',                   select: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-8'], help: 'Haiku: rápido y económico · Sonnet: equilibrado · Opus: más capaz' },
+  { key: 'ai_system_prompt',     label: 'Instrucciones del agente', placeholder: 'Eres un asistente de atención al cliente de Alamex...', textarea: true, help: 'Define la personalidad, tono y conocimiento del agente' },
+  { key: 'ai_context_messages',  label: 'Mensajes de contexto',     placeholder: '10', help: 'Cuántos mensajes anteriores incluir (1–50, default 10)' },
+  { key: 'ai_handoff_keywords',  label: 'Palabras clave de traspaso', placeholder: 'agente, humano, persona, ayuda', help: 'Si el usuario escribe estas palabras se transfiere a un agente (separadas por coma)' },
+]
 
 const CHANNEL_FIELDS = {
   whatsapp: [
@@ -17,6 +27,7 @@ const CHANNEL_FIELDS = {
     { key: 'access_token',    label: 'Access Token',    placeholder: 'EAAxxxxxxx',       secret: true,  help: 'Business settings → System users → Generate token' },
     { key: 'app_secret',      label: 'App Secret',      placeholder: 'd032571146...',    secret: true,  help: 'Meta → tu App → App settings → Basic → App secret' },
     { key: 'verify_token',    label: 'Verify Token',    placeholder: 'tu-token-secreto', secret: true,  help: 'Palabra clave que tú eliges — la misma que en Meta Webhooks' },
+    ...AI_FIELDS,
   ],
   messenger: [
     { key: 'page_id',            label: 'Facebook Page ID',    placeholder: '409937795710821', secret: false, help: 'Tu Página → About, o Meta Business Suite → Settings' },
@@ -24,11 +35,13 @@ const CHANNEL_FIELDS = {
     { key: 'page_access_token',  label: 'Page Access Token',   placeholder: 'EAADxxxxx',       secret: true,  help: 'App → Messenger → API settings → Generate token' },
     { key: 'app_secret',         label: 'App Secret',          placeholder: '2601f354...',      secret: true,  help: 'Meta → tu App → App settings → Basic → App secret' },
     { key: 'verify_token',       label: 'Verify Token',        placeholder: 'tu-token-secreto', secret: true,  help: 'Palabra clave que tú eliges' },
+    ...AI_FIELDS,
   ],
   instagram: [
     { key: 'instagram_account_id', label: 'Instagram Account ID', placeholder: '17841408067010982', secret: false, help: 'Meta Business settings → Linked accounts, o Graph API' },
     { key: 'meta_app_id',          label: 'Meta App ID',          placeholder: '1028723836244861', secret: false, help: 'Meta → tu App → App settings → Basic' },
     { key: 'access_token',         label: 'Access Token',         placeholder: 'IGAANxxxxx',        secret: true,  help: 'App → Instagram → API setup → Generate token' },
+    ...AI_FIELDS,
   ],
   website: [
     { key: 'widget_key',        label: 'Widget Key (auto)',     placeholder: 'web_xxxx',              secret: false, readonly: true, help: 'Generado automáticamente — pégalo en tu sitio web' },
@@ -37,7 +50,7 @@ const CHANNEL_FIELDS = {
     { key: 'accent_color',      label: 'Color de acento',      placeholder: '#e7a518',               secret: false, color: true, help: 'Color principal del botón y cabecera' },
     { key: 'greeting_message',  label: 'Mensaje de bienvenida',placeholder: '¡Hola! ¿En qué puedo ayudarte?', secret: false, textarea: true, help: 'Primer mensaje que ve el visitante' },
     { key: 'launcher_position', label: 'Posición del botón',   placeholder: 'bottom-right',          secret: false, select: ['bottom-right', 'bottom-left'], help: 'Esquina donde aparece el botón flotante' },
-    { key: 'ai_instructions',   label: 'Instrucciones IA (solo web)', placeholder: 'Instrucciones adicionales...', secret: false, textarea: true, help: 'Contexto extra para el agente en el widget web' },
+    ...AI_FIELDS,
   ],
 }
 
@@ -152,56 +165,82 @@ function ChannelModal({ channel, onSave, onClose }) {
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
               {channel.type === 'website' ? 'Configuración' : 'Credenciales'}
             </p>
-            {fields.map(f => (
-              <div key={f.key}>
-                <label className="text-xs font-medium text-gray-600 block mb-1">{f.label}</label>
-                {f.secret ? (
-                  <SecretInput
-                    value={creds[f.key] || ''}
-                    onChange={v => setCreds(c => ({ ...c, [f.key]: v }))}
-                    placeholder={f.placeholder}
-                  />
-                ) : f.textarea ? (
-                  <textarea
-                    value={creds[f.key] || ''}
-                    onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
-                    placeholder={f.placeholder}
-                    rows={3}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 resize-none"
-                  />
-                ) : f.color ? (
-                  <div className="flex items-center gap-2">
-                    <input type="color" value={creds[f.key] || '#e7a518'}
-                      onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
-                      className="w-10 h-9 rounded border border-gray-200 cursor-pointer p-0.5" />
-                    <input value={creds[f.key] || '#e7a518'}
+            {fields.map((f, i) => {
+              if (f.divider) return (
+                <div key={`divider-${i}`} className="pt-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Bot size={13} className="text-violet-500" />
+                    <span className="text-xs font-semibold text-violet-600 uppercase tracking-wide">{f.label}</span>
+                    <div className="flex-1 h-px bg-violet-100" />
+                  </div>
+                </div>
+              )
+              if (f.boolean) return (
+                <div key={f.key} className="flex items-center justify-between py-1">
+                  <div>
+                    <span className="text-xs font-medium text-gray-600">{f.label}</span>
+                    <p className="text-[11px] text-gray-400">{f.help}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCreds(c => ({ ...c, [f.key]: !c[f.key] }))}
+                    className={`flex-shrink-0 transition-colors ${creds[f.key] ? 'text-violet-500' : 'text-gray-300'}`}
+                  >
+                    {creds[f.key] ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
+                  </button>
+                </div>
+              )
+              return (
+                <div key={f.key}>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">{f.label}</label>
+                  {f.secret ? (
+                    <SecretInput
+                      value={creds[f.key] || ''}
+                      onChange={v => setCreds(c => ({ ...c, [f.key]: v }))}
+                      placeholder={f.placeholder}
+                    />
+                  ) : f.textarea ? (
+                    <textarea
+                      value={creds[f.key] || ''}
                       onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
                       placeholder={f.placeholder}
-                      className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-mono" />
-                  </div>
-                ) : f.select ? (
-                  <select value={creds[f.key] || f.select[0]}
-                    onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400">
-                    {f.select.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                  </select>
-                ) : f.readonly ? (
-                  <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                    <code className="text-xs text-gray-600 flex-1 truncate">{creds[f.key] || '(se generará al guardar)'}</code>
-                    {creds[f.key] && <button onClick={() => navigator.clipboard.writeText(creds[f.key])}
-                      className="text-[11px] text-blue-500 hover:text-blue-700 font-medium flex-shrink-0">Copiar</button>}
-                  </div>
-                ) : (
-                  <input
-                    value={creds[f.key] || ''}
-                    onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
-                    placeholder={f.placeholder}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-mono"
-                  />
-                )}
-                <p className="text-[11px] text-gray-400 mt-0.5">{f.help}</p>
-              </div>
-            ))}
+                      rows={3}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 resize-none"
+                    />
+                  ) : f.color ? (
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={creds[f.key] || '#e7a518'}
+                        onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
+                        className="w-10 h-9 rounded border border-gray-200 cursor-pointer p-0.5" />
+                      <input value={creds[f.key] || '#e7a518'}
+                        onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
+                        placeholder={f.placeholder}
+                        className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-mono" />
+                    </div>
+                  ) : f.select ? (
+                    <select value={creds[f.key] || f.select[0]}
+                      onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400">
+                      {f.select.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
+                  ) : f.readonly ? (
+                    <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                      <code className="text-xs text-gray-600 flex-1 truncate">{creds[f.key] || '(se generará al guardar)'}</code>
+                      {creds[f.key] && <button onClick={() => navigator.clipboard.writeText(creds[f.key])}
+                        className="text-[11px] text-blue-500 hover:text-blue-700 font-medium flex-shrink-0">Copiar</button>}
+                    </div>
+                  ) : (
+                    <input
+                      value={creds[f.key] || ''}
+                      onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
+                      placeholder={f.placeholder}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-mono"
+                    />
+                  )}
+                  <p className="text-[11px] text-gray-400 mt-0.5">{f.help}</p>
+                </div>
+              )
+            })}
           </div>
 
           {/* Test result */}
@@ -243,7 +282,7 @@ function ChannelModal({ channel, onSave, onClose }) {
 function ChannelCard({ channel, onEdit, onToggle, onDelete }) {
   const meta = CHANNEL_META[channel.type] || {}
   const fields = CHANNEL_FIELDS[channel.type] || []
-  const filledCount = fields.filter(f => (channel.credentials || {})[f.key]).length
+  const filledCount = fields.filter(f => f.key && !f.boolean && (channel.credentials || {})[f.key]).length
 
   return (
     <div className={`bg-white rounded-xl border shadow-sm p-5 transition-all ${channel.is_active ? 'border-gray-100' : 'border-gray-100 opacity-60'}`}>

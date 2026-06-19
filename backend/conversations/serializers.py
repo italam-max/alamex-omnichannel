@@ -3,7 +3,7 @@ from rest_framework import serializers
 from .models import Channel, Contact, Conversation, Message
 
 # Fields considered secret — never returned to the client after save
-SECRET_FIELDS = {"access_token", "page_access_token", "app_secret", "verify_token"}
+SECRET_FIELDS = {"access_token", "page_access_token", "app_secret", "verify_token", "ai_api_key"}
 
 
 class ChannelSerializer(serializers.ModelSerializer):
