@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from .models import KnowledgeDoc, AIConfig
 
+_SECRET = '••••••••'
+
 
 class KnowledgeDocSerializer(serializers.ModelSerializer):
     class Meta:
@@ -18,6 +20,19 @@ class AIConfigSerializer(serializers.ModelSerializer):
             'identity_line', 'agent_description',
             'behavior_rules',
             'language_policy', 'supported_languages',
+            'ai_api_key',
             'updated_at',
         ]
         read_only_fields = ['id', 'updated_at']
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        if rep.get('ai_api_key'):
+            rep['ai_api_key'] = _SECRET
+        return rep
+
+    def update(self, instance, validated_data):
+        # Blank secret = keep existing
+        if validated_data.get('ai_api_key', '') == '' or validated_data.get('ai_api_key') == _SECRET:
+            validated_data.pop('ai_api_key', None)
+        return super().update(instance, validated_data)

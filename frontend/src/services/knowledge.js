@@ -32,3 +32,10 @@ export async function updateDoc(id, payload) {
 export async function deleteDoc(id) {
   await api.delete(`/knowledge/docs/${id}/`)
 }
+
+// ── Scraper ───────────────────────────────────────────────────────
+
+export async function scrapeWebsite(payload) {
+  const { data } = await api.post('/knowledge/scrape/', payload)
+  return data
+}

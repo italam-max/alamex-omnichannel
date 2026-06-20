@@ -16,8 +16,10 @@ whitenoise==6.9.0
 celery==5.5.3
 redis==5.3.0
 
-# HTTP client (Meta Graph API calls)
+# HTTP client (Meta Graph API calls) + web scraper
 requests==2.34.2
+beautifulsoup4==4.15.0
+html5lib==1.1
 
 # AI agent
 anthropic==0.111.0

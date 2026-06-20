@@ -44,6 +44,9 @@ class AIConfig(models.Model):
     )
     supported_languages = models.CharField(max_length=200, default='es, en')
 
+    # Global API key for scraper + default agent (SECRET — never returned plaintext)
+    ai_api_key = models.TextField(blank=True)
+
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

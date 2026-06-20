@@ -1,11 +1,12 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
-from .views import KnowledgeDocViewSet, ai_config_view
+from .views import KnowledgeDocViewSet, ai_config_view, scrape_view
 
 router = DefaultRouter()
 router.register('docs', KnowledgeDocViewSet)
 
 urlpatterns = [
     path('config/', ai_config_view, name='ai-config'),
+    path('scrape/', scrape_view, name='knowledge-scrape'),
     *router.urls,
 ]
