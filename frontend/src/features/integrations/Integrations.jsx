@@ -12,10 +12,9 @@ const WEBHOOK_URL = `${window.location.protocol}//${window.location.hostname}:80
 
 const AI_FIELDS = [
   { divider: true, label: 'Agente IA' },
-  { key: 'ai_enabled',           label: 'Activar agente IA',        boolean: true,  help: 'El asistente responde automáticamente con Claude' },
+  { key: 'ai_enabled',           label: 'Activar agente IA',        boolean: true,  help: 'El asistente responde automáticamente usando la configuración de Conocimiento' },
   { key: 'ai_api_key',           label: 'Anthropic API Key',         placeholder: 'sk-ant-api03-...', secret: true, help: 'Tu llave de Anthropic — anthropic.com/account/keys' },
   { key: 'ai_model',             label: 'Modelo',                   select: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-8'], help: 'Haiku: rápido y económico · Sonnet: equilibrado · Opus: más capaz' },
-  { key: 'ai_system_prompt',     label: 'Instrucciones del agente', placeholder: 'Eres un asistente de atención al cliente de Alamex...', textarea: true, help: 'Define la personalidad, tono y conocimiento del agente' },
   { key: 'ai_context_messages',  label: 'Mensajes de contexto',     placeholder: '10', help: 'Cuántos mensajes anteriores incluir (1–50, default 10)' },
   { key: 'ai_handoff_keywords',  label: 'Palabras clave de traspaso', placeholder: 'agente, humano, persona, ayuda', help: 'Si el usuario escribe estas palabras se transfiere a un agente (separadas por coma)' },
 ]

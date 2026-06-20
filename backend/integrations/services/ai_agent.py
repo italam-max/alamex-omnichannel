@@ -1,14 +1,16 @@
 """
 AI Agent service — calls Claude with per-channel configuration.
 
-Each Channel stores AI config in its credentials JSONField:
+Per-channel credentials JSONField:
   ai_enabled          bool    (default: False)
   ai_api_key          str     (Anthropic API key — SECRET)
   ai_model            str     (claude-haiku-4-5-20251001 | claude-sonnet-4-6 | claude-opus-4-8)
-  ai_system_prompt    str     (system instructions)
   ai_context_messages int     (how many prior messages to include — default 10)
   ai_max_tokens       int     (default 1024)
   ai_handoff_keywords str     (comma-separated — trigger human takeover)
+
+Global (knowledge.AIConfig singleton):
+  identity_line, agent_description, overview, behavior_rules, language_policy, supported_languages
 """
 import logging
 import anthropic
@@ -21,11 +23,52 @@ ROLE_MAP = {
     'agent':    'assistant',
 }
 
-DEFAULT_SYSTEM = (
+FALLBACK_SYSTEM = (
     "Eres un asistente de atención al cliente amable y profesional. "
     "Responde siempre en el mismo idioma que el cliente. "
     "Si no sabes la respuesta, dilo con honestidad en lugar de inventar información."
 )
+
+
+def _build_system_prompt() -> str:
+    """Build the system prompt from the global AIConfig + KnowledgeDoc records."""
+    try:
+        from knowledge.models import AIConfig, KnowledgeDoc
+        config = AIConfig.get_solo()
+        docs = list(KnowledgeDoc.objects.filter(is_active=True).order_by('order', 'created_at'))
+    except Exception:
+        return FALLBACK_SYSTEM
+
+    parts = []
+
+    # Identity line + description
+    if config.identity_line:
+        parts.append(config.identity_line)
+    if config.agent_description:
+        parts.append(config.agent_description)
+
+    # Knowledge overview
+    if config.overview:
+        parts.append("=== BUSINESS OVERVIEW ===\n" + config.overview)
+
+    # Knowledge documents
+    if docs:
+        doc_blocks = "\n\n".join(f"--- {d.title} ---\n{d.content}" for d in docs)
+        parts.append("=== KNOWLEDGE BASE ===\n" + doc_blocks)
+
+    # Behavior rules
+    rules = [r for r in (config.behavior_rules or []) if r and r.strip()]
+    if rules:
+        rule_text = "\n".join(f"{i+1}. {r}" for i, r in enumerate(rules))
+        parts.append("=== BEHAVIOR RULES (follow in order) ===\n" + rule_text)
+
+    # Language policy
+    if config.language_policy == 'mirror':
+        parts.append("Always reply in the same language the customer uses.")
+    elif config.supported_languages:
+        parts.append(f"Supported languages: {config.supported_languages}.")
+
+    return "\n\n".join(parts) if parts else FALLBACK_SYSTEM
 
 
 def get_ai_response(channel, conversation, incoming_text: str) -> tuple:
@@ -61,7 +104,7 @@ def get_ai_response(channel, conversation, incoming_text: str) -> tuple:
 
     # ── Build message history ─────────────────────────────────────
     model         = creds.get('ai_model', 'claude-haiku-4-5-20251001')
-    system_prompt = (creds.get('ai_system_prompt') or '').strip() or DEFAULT_SYSTEM
+    system_prompt = _build_system_prompt()
     context_count = max(1, min(50, int(creds.get('ai_context_messages') or 10)))
     max_tokens    = max(64, min(4096, int(creds.get('ai_max_tokens') or 1024)))
 
