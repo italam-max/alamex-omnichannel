@@ -205,11 +205,6 @@ function ScraperSection({ onImport }) {
                   {showKey ? <EyeOff size={11} /> : <Eye size={11} />}
                 </button>
               </div>
-              {hasStoredKey && apiKey === '••••••••' && (
-                <span className="text-[11px] text-emerald-500 flex items-center gap-1">
-                  <Check size={11} /> guardada
-                </span>
-              )}
             </div>
           </div>
         </div>
@@ -460,6 +455,7 @@ export default function Knowledge() {
   const [config, setConfig]         = useState(null)
   const [docs, setDocs]             = useState([])
   const [loading, setLoading]       = useState(true)
+  const [loadError, setLoadError]   = useState(null)
   const [saving, setSaving]         = useState(false)
   const [saveStatus, setSaveStatus] = useState(null)
   const [showAddNote, setShowAddNote] = useState(false)
@@ -468,11 +464,14 @@ export default function Knowledge() {
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const [cfg, docData] = await Promise.all([getAIConfig(), listDocs()])
       setConfig(cfg)
       setDocs(Array.isArray(docData) ? docData : (docData.results || []))
       setIsCustomTone(!!cfg.tone && !PRESET_VALUES.has(cfg.tone))
+    } catch (e) {
+      setLoadError(e.response?.data?.detail || e.message || 'Error al cargar la configuración')
     } finally {
       setLoading(false)
     }
@@ -549,10 +548,29 @@ export default function Knowledge() {
   }
   const handleRuleAdd = () => setField('behavior_rules', [...(config.behavior_rules || []), ''])
 
-  if (loading || !config) {
+  if (loading) {
     return (
       <PageShell title="Conocimiento" subtitle="Extractor web · Documentos · Persona · Reglas · Idioma">
-        <div className="flex items-center justify-center h-48"><Loader size={24} className="animate-spin text-gray-300" /></div>
+        <div className="flex items-center justify-center h-48">
+          <Loader size={24} className="animate-spin text-gray-300" />
+        </div>
+      </PageShell>
+    )
+  }
+
+  if (loadError || !config) {
+    return (
+      <PageShell title="Conocimiento" subtitle="Extractor web · Documentos · Persona · Reglas · Idioma">
+        <div className="flex flex-col items-center justify-center h-48 gap-3">
+          <AlertCircle size={28} className="text-red-300" />
+          <p className="text-sm text-gray-500">{loadError || 'No se pudo cargar la configuración'}</p>
+          <button
+            onClick={load}
+            className="flex items-center gap-2 px-4 py-2 text-xs bg-white border border-gray-200 rounded-lg hover:border-blue-300 text-gray-600 transition-colors"
+          >
+            <Loader size={12} /> Reintentar
+          </button>
+        </div>
       </PageShell>
     )
   }
