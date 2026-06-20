@@ -1,7 +1,7 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import {
   MessageSquare, LayoutDashboard, Users, BookOpen,
-  Plug, ChevronRight, Bot, Globe, LogOut
+  Plug, Bot, Globe, LogOut, Settings2
 } from 'lucide-react'
 import { useAuth } from '../../store/auth'
 
@@ -51,10 +51,26 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Footer */}
-      <div className="p-3 border-t border-white/10">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/8 cursor-pointer transition-colors group"
-          onClick={() => useAuth.getState().logout()}>
+      {/* Footer — Settings + logout */}
+      <div className="p-3 border-t border-white/10 space-y-0.5">
+        <NavLink
+          to="/settings"
+          className={({ isActive }) =>
+            `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+              isActive
+                ? 'bg-blue-600 text-white'
+                : 'text-white/60 hover:bg-white/8 hover:text-white'
+            }`
+          }
+        >
+          <Settings2 size={17} />
+          <span className="flex-1">Ajustes</span>
+        </NavLink>
+
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/8 cursor-pointer transition-colors group"
+          onClick={() => useAuth.getState().logout()}
+        >
           <div className="w-7 h-7 rounded-full bg-blue-500/30 flex items-center justify-center text-blue-300 text-xs font-semibold">
             A
           </div>

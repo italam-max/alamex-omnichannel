@@ -7,6 +7,7 @@ import Inbox from './features/inbox/Inbox'
 import Leads from './features/leads/Leads'
 import Knowledge from './features/knowledge/Knowledge'
 import Integrations from './features/integrations/Integrations'
+import Settings from './features/settings/Settings'
 import WidgetTest from './features/widget/WidgetTest'
 
 function PrivateLayout() {
@@ -20,6 +21,7 @@ function PrivateLayout() {
           <Route path="/leads" element={<Leads />} />
           <Route path="/knowledge" element={<Knowledge />} />
           <Route path="/integrations" element={<Integrations />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/widget-test" element={<WidgetTest />} />
         </Routes>
       </div>

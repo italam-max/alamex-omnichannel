@@ -129,6 +129,18 @@ def _structure_with_claude(pages: list[dict], api_key: str) -> list[dict]:
 
 # ── Public API ────────────────────────────────────────────────────
 
+def _resolve_api_key(api_key: str) -> str:
+    """Return provided key, falling back to the platform master key."""
+    key = (api_key or '').strip()
+    if key and key != '••••••••':
+        return key
+    try:
+        from django.conf import settings
+        return getattr(settings, 'ANTHROPIC_API_KEY', '') or ''
+    except Exception:
+        return ''
+
+
 def scrape_website(
     url: str,
     follow_links: bool = False,
@@ -169,8 +181,9 @@ def scrape_website(
                 if len(ltext) > 150:
                     pages.append({'url': link, 'title': ltitle, 'text': ltext})
 
-    # Try Claude structuring if API key available
-    if api_key and api_key.strip():
+    # Try Claude structuring using master key (or caller-provided key)
+    api_key = _resolve_api_key(api_key)
+    if api_key:
         docs = _structure_with_claude(pages, api_key.strip())
         if docs:
             return {'pages_scraped': len(pages), 'documents': docs, 'ai_structured': True, 'error': None}

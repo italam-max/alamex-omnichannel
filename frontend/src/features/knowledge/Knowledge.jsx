@@ -3,8 +3,8 @@ import PageShell from '../../components/layout/PageShell'
 import {
   Globe, Plus, Trash2, FileText, Save, Loader,
   ChevronUp, ChevronDown, CheckCircle, XCircle, X,
-  Bot, BookOpen, Languages, Sparkles, Link, RefreshCw,
-  Eye, EyeOff, Check, AlertCircle
+  Bot, BookOpen, Languages, Sparkles, Link,
+  Eye, EyeOff, AlertCircle
 } from 'lucide-react'
 import {
   getAIConfig, saveAIConfig,
@@ -56,9 +56,9 @@ function SectionHeader({ id, icon: Icon, label, sub }) {
 
 // ── Web Scraper section ───────────────────────────────────────────
 
-function ScraperSection({ hasStoredKey, onImport }) {
+function ScraperSection({ onImport }) {
   const [url, setUrl]                 = useState('')
-  const [apiKey, setApiKey]           = useState(hasStoredKey ? '••••••••' : '')
+  const [apiKey, setApiKey]           = useState('')
   const [showKey, setShowKey]         = useState(false)
   const [followLinks, setFollowLinks] = useState(true)
   const [maxPages, setMaxPages]       = useState(5)
@@ -557,8 +557,6 @@ export default function Knowledge() {
     )
   }
 
-  const hasStoredKey = config.ai_api_key === '••••••••'
-
   return (
     <PageShell title="Conocimiento" subtitle="Extractor web · Documentos · Persona · Reglas · Idioma">
       {/* Top bar */}
@@ -593,20 +591,13 @@ export default function Knowledge() {
               label="Extractor web"
               sub="Analiza tu sitio y genera documentos de conocimiento automáticamente"
             />
-            <ScraperSection hasStoredKey={hasStoredKey} onImport={handleImportDocs} />
+            <ScraperSection onImport={handleImportDocs} />
 
-            {/* Save API key to config */}
-            {!hasStoredKey && (
-              <p className="text-[11px] text-gray-400 mt-2">
-                Guarda tu Anthropic API Key en la configuración para no tenerla que ingresar cada vez.{' '}
-                <button
-                  onClick={() => document.getElementById('persona')?.scrollIntoView({ behavior: 'smooth' })}
-                  className="text-violet-500 hover:text-violet-700"
-                >
-                  Configurar →
-                </button>
-              </p>
-            )}
+            <p className="text-[11px] text-gray-400 mt-2">
+              La API key se configura en{' '}
+              <a href="/settings" className="text-violet-500 hover:text-violet-700">Ajustes → Proveedor de IA</a>.
+              Si está configurada, el extractor usa Claude automáticamente.
+            </p>
           </section>
 
           {/* ── OVERVIEW ─────────────────────────────────────────── */}
@@ -730,22 +721,6 @@ export default function Knowledge() {
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-violet-400 resize-none" />
               </div>
 
-              <div className="pt-2 border-t border-gray-50">
-                <label className="text-xs font-medium text-gray-600 block mb-1">
-                  API Key de Anthropic
-                  <span className="ml-1 text-gray-400 font-normal">(para el agente IA y el extractor web)</span>
-                </label>
-                <input
-                  type="password"
-                  value={config.ai_api_key || ''}
-                  onChange={e => setField('ai_api_key', e.target.value)}
-                  placeholder={hasStoredKey ? '(guardada — dejar vacío para no cambiar)' : 'sk-ant-api03-…'}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-violet-400 font-mono"
-                />
-                <p className="text-[11px] text-gray-400 mt-0.5">
-                  Llave global — se usa si el canal no tiene su propia llave. Guarda con el botón de arriba.
-                </p>
-              </div>
             </div>
           </section>
 

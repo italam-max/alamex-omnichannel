@@ -17,6 +17,9 @@ DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
+# ── AI Provider — master key (operator level, never in DB) ────────
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -35,6 +38,7 @@ INSTALLED_APPS = [
     'contacts',
     'knowledge',
     'integrations',
+    'billing',
 ]
 
 MIDDLEWARE = [
