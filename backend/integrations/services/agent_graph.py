@@ -9,9 +9,10 @@ Public API:
 """
 import logging
 
+import anthropic as anthropic_sdk
 from django.conf import settings
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage as _AIMsg, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
@@ -130,10 +131,27 @@ def _node_call_model(state: AgentState) -> dict:
         model=state['model'],
         api_key=api_key,
         max_tokens=state['max_tokens'],
+        timeout=60,
     ).bind_tools(AGENT_TOOLS)
 
     try:
         response = model.invoke(state['messages'])
+    except (anthropic_sdk.APITimeoutError, anthropic_sdk.APIConnectionError) as exc:
+        logger.warning('[Agent] Claude connection error (timeout/network): %s', exc)
+        fallback = _AIMsg(content="Lo siento, la respuesta tardó demasiado. Por favor intenta de nuevo.")
+        return {
+            'messages': [fallback],
+            'total_input_tokens': state.get('total_input_tokens', 0),
+            'total_output_tokens': state.get('total_output_tokens', 0),
+        }
+    except anthropic_sdk.RateLimitError as exc:
+        logger.warning('[Agent] Claude rate limit: %s', exc)
+        fallback = _AIMsg(content="Estamos recibiendo muchas solicitudes. Intenta en unos segundos.")
+        return {
+            'messages': [fallback],
+            'total_input_tokens': state.get('total_input_tokens', 0),
+            'total_output_tokens': state.get('total_output_tokens', 0),
+        }
     except Exception as exc:
         logger.error('[Agent] Claude error: %s', exc)
         return {
