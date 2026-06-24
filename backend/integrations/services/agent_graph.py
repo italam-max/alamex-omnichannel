@@ -26,29 +26,27 @@ logger = logging.getLogger(__name__)
 FALLBACK_SYSTEM = (
     "Eres un asistente de atención al cliente amable y profesional. "
     "Responde siempre en el mismo idioma que el cliente. "
-    "Si no sabes la respuesta, búscala en la base de conocimiento antes de responder."
+    "Si no sabes la respuesta, búscala en la base de conocimiento antes de responder.\n\n"
+    "=== HERRAMIENTAS (uso obligatorio) ===\n"
+    "1. search_knowledge_base — ANTES de responder cualquier pregunta factual del negocio.\n"
+    "2. create_lead — cuando el cliente expresa intención de compra. No pidas permiso.\n"
+    "3. create_followup — cuando el cliente pide que lo llamen o agenda una cita. Ejecútalo de inmediato.\n"
+    "4. handoff_to_human — cuando el cliente pide hablar con una persona.\n"
+    "Llama la herramienta en el MISMO turno que la solicitud del cliente. Nunca describas una acción sin ejecutarla."
 )
 
-TOOLS_INSTRUCTION = """
-=== TOOL USAGE RULES (mandatory) ===
+# Instrucciones de herramientas en español para agregar al prompt construido desde AIConfig
+_TOOLS_ES = """=== HERRAMIENTAS (uso obligatorio) ===
 
-1. search_knowledge_base — call BEFORE answering ANY factual question about the business
-   (products, prices, plans, channels, hours, policies, support). Never guess.
+1. search_knowledge_base — consultar ANTES de responder cualquier pregunta factual sobre el negocio (productos, precios, planes, canales, horarios, políticas, soporte). Nunca adivines.
 
-2. create_lead — call when the customer expresses buying intent, asks for a quote,
-   mentions their company, or says they want to hire/contract/purchase something.
-   Do NOT ask for permission — just call the tool and confirm it in your reply.
+2. create_lead — llamar cuando el cliente expresa intención de compra, pide una cotización, menciona su empresa o quiere contratar algo. No pidas permiso — ejecuta la herramienta y confirma en la respuesta.
 
-3. create_followup — call when the customer asks to be called back, mentions a future
-   appointment, says "call me tomorrow / next week", or requests any scheduled contact.
-   Do NOT just say "I'll schedule it" — actually call the tool immediately.
+3. create_followup — llamar cuando el cliente pide que lo llamen, menciona una cita futura o solicita contacto programado. No digas "lo agendaré" — ejecútalo de inmediato.
 
-4. handoff_to_human — call when the customer explicitly wants to speak with a person,
-   has a legal/billing/urgent complaint, or when you cannot help after trying the tools.
+4. handoff_to_human — llamar cuando el cliente quiere hablar con una persona, tiene una queja legal/urgente o cuando no puedes ayudar tras usar las herramientas.
 
-Always call the relevant tool in the SAME turn as the customer's request. Never
-describe an action you will take without actually calling the tool to do it.
-"""
+Llama la herramienta relevante en el MISMO turno de la solicitud. Nunca describas una acción sin ejecutarla con la herramienta correspondiente."""
 
 
 def _build_system_prompt() -> str:
@@ -56,7 +54,7 @@ def _build_system_prompt() -> str:
         from knowledge.models import AIConfig
         config = AIConfig.get_solo()
     except Exception:
-        return FALLBACK_SYSTEM + TOOLS_INSTRUCTION
+        return FALLBACK_SYSTEM
 
     parts = []
     if config.identity_line:
@@ -64,20 +62,20 @@ def _build_system_prompt() -> str:
     if config.agent_description:
         parts.append(config.agent_description)
     if config.overview:
-        parts.append("=== BUSINESS OVERVIEW ===\n" + config.overview)
+        parts.append("=== CONTEXTO DEL NEGOCIO ===\n" + config.overview)
 
     rules = [r for r in (config.behavior_rules or []) if r and r.strip()]
     if rules:
         rule_text = "\n".join(f"{i+1}. {r}" for i, r in enumerate(rules))
-        parts.append("=== BEHAVIOR RULES ===\n" + rule_text)
+        parts.append("=== REGLAS DE COMPORTAMIENTO ===\n" + rule_text)
 
     if config.language_policy == 'mirror':
-        parts.append("Always reply in the same language the customer uses.")
+        parts.append("Responde siempre en el mismo idioma que usa el cliente.")
     elif config.supported_languages:
-        parts.append(f"Supported languages: {config.supported_languages}.")
+        parts.append(f"Idiomas soportados: {config.supported_languages}.")
 
-    parts.append(TOOLS_INSTRUCTION.strip())
-    return "\n\n".join(parts) if parts else FALLBACK_SYSTEM + TOOLS_INSTRUCTION
+    parts.append(_TOOLS_ES)
+    return "\n\n".join(parts) if parts else FALLBACK_SYSTEM
 
 
 # ── Billing helpers ───────────────────────────────────────────────
