@@ -4,7 +4,7 @@ import {
   Globe, Plus, Trash2, FileText, Save, Loader,
   ChevronUp, ChevronDown, CheckCircle, XCircle, X,
   Bot, BookOpen, Languages, Sparkles, Link,
-  Eye, EyeOff, AlertCircle
+  Eye, EyeOff, AlertCircle, Cpu, Zap
 } from 'lucide-react'
 import {
   getAIConfig, saveAIConfig,
@@ -12,7 +12,110 @@ import {
   scrapeWebsite,
 } from '../../services/knowledge'
 
-// ── Section anchor nav ────────────────────────────────────────────
+// ── Agent architecture diagram ─────────────────────────────────────
+
+function AgentFlowCard() {
+  return (
+    <div style={{
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: '14px',
+      padding: '18px 20px',
+      marginBottom: '28px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+        <Cpu size={14} style={{ color: 'var(--gold)' }} />
+        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+          Cómo usa el agente esta configuración
+        </span>
+      </div>
+
+      {/* Flow diagram */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+        {/* Left block: config params */}
+        <div style={{
+          background: 'var(--gold-vp)',
+          border: '1px solid rgba(192,155,58,0.35)',
+          borderRadius: '10px',
+          padding: '10px 14px',
+          minWidth: '140px',
+        }}>
+          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 6px' }}>
+            Esta página
+          </p>
+          {[
+            ['Persona',  'identity_line'],
+            ['Resumen',  'contexto del negocio'],
+            ['Reglas',   'instrucciones'],
+            ['Idioma',   'política'],
+          ].map(([label, sub]) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '3px' }}>
+              <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'var(--gold)', flexShrink: 0, opacity: 0.7 }} />
+              <span style={{ fontSize: '11px', color: 'var(--text-mid)', fontWeight: 500 }}>{label}</span>
+              <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>→ {sub}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ color: 'var(--gold)', fontSize: '20px', flexShrink: 0 }}>→</div>
+
+        {/* Center: system prompt + Claude */}
+        <div style={{
+          background: 'var(--ink)',
+          borderRadius: '10px',
+          padding: '10px 14px',
+          minWidth: '150px',
+          textAlign: 'center',
+        }}>
+          <p style={{ fontSize: '10px', color: 'rgba(251,247,238,0.45)', margin: '0 0 2px', letterSpacing: '1px', textTransform: 'uppercase' }}>
+            Prompt del sistema
+          </p>
+          <p style={{ fontSize: '13px', fontWeight: 700, color: '#FBF7EE', margin: '0 0 4px' }}>
+            Agente IA
+          </p>
+          <p style={{ fontSize: '10px', color: 'rgba(192,155,58,0.8)', margin: 0 }}>
+            Razona · Decide · Actúa
+          </p>
+        </div>
+
+        <div style={{ color: 'var(--gold)', fontSize: '20px', flexShrink: 0 }}>←</div>
+
+        {/* Right: knowledge base */}
+        <div style={{
+          background: 'var(--jade-pale)',
+          border: '1px solid rgba(26,92,58,0.25)',
+          borderRadius: '10px',
+          padding: '10px 14px',
+          minWidth: '140px',
+        }}>
+          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--jade)', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 6px' }}>
+            Base de conocimiento
+          </p>
+          <div style={{ fontSize: '11px', color: 'var(--text-mid)', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <Zap size={10} style={{ color: 'var(--jade)', flexShrink: 0 }} />
+            <span>search_knowledge_base</span>
+          </div>
+          <p style={{ fontSize: '10px', color: 'var(--text-muted)', margin: '0 0 0 15px' }}>
+            El agente consulta los documentos cuando necesita responder preguntas específicas
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Per-section callout ────────────────────────────────────────────
+
+function AgentNote({ children }) {
+  return (
+    <div className="agent-note" style={{ marginBottom: '16px' }}>
+      <Zap size={13} style={{ color: 'var(--gold)', flexShrink: 0, marginTop: '1px' }} />
+      <span>{children}</span>
+    </div>
+  )
+}
+
+// ── Section anchor nav ─────────────────────────────────────────────
 
 const SECTIONS = [
   { id: 'scraper',   label: 'Extractor web',       icon: Globe },
@@ -43,12 +146,21 @@ const GENDER_OPTIONS = [
 function SectionHeader({ id, icon: Icon, label, sub }) {
   return (
     <div id={id} className="flex items-center gap-3 mb-4">
-      <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center flex-shrink-0">
-        <Icon size={15} className="text-violet-500" />
+      <div style={{
+        width: '32px', height: '32px', borderRadius: '8px',
+        background: 'var(--gold-pale)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+      }}>
+        <Icon size={15} style={{ color: 'var(--gold)' }} />
       </div>
       <div>
-        <h2 className="text-sm font-semibold text-gray-800">{label}</h2>
-        {sub && <p className="text-xs text-gray-400">{sub}</p>}
+        <h2 style={{
+          fontSize: '13px', fontWeight: 700, color: 'var(--text)', margin: 0,
+          fontFamily: "Georgia, 'Palatino Linotype', serif",
+        }}>
+          {label}
+        </h2>
+        {sub && <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '2px 0 0' }}>{sub}</p>}
       </div>
     </div>
   )
@@ -140,7 +252,7 @@ function ScraperSection({ onImport }) {
           <div>
             <label className="text-xs font-medium text-gray-600 block mb-1">URL del sitio web</label>
             <div className="flex gap-2">
-              <div className="flex-1 flex items-center border border-gray-200 rounded-lg overflow-hidden focus-within:border-violet-400">
+              <div className="flex-1 flex items-center border border-gray-200 rounded-lg overflow-hidden focus-within:border-amber-400">
                 <Link size={13} className="ml-3 text-gray-400 flex-shrink-0" />
                 <input
                   value={url}
@@ -153,7 +265,7 @@ function ScraperSection({ onImport }) {
               <button
                 onClick={handleScrape}
                 disabled={loading || !url.trim()}
-                className="flex items-center gap-2 px-4 py-2 bg-violet-500 hover:bg-violet-600 text-white text-xs font-medium rounded-lg disabled:opacity-50 transition-colors whitespace-nowrap"
+                className="btn-gold" style={{whiteSpace:"nowrap"}}
               >
                 {loading ? <Loader size={13} className="animate-spin" /> : <Globe size={13} />}
                 {loading ? 'Analizando…' : 'Extraer información'}
@@ -168,7 +280,7 @@ function ScraperSection({ onImport }) {
                 type="checkbox"
                 checked={followLinks}
                 onChange={e => setFollowLinks(e.target.checked)}
-                className="w-3.5 h-3.5 rounded accent-violet-500"
+                className="w-3.5 h-3.5 rounded accent-amber-600"
               />
               <span className="text-xs text-gray-600">Seguir enlaces internos</span>
             </label>
@@ -179,7 +291,7 @@ function ScraperSection({ onImport }) {
                 <select
                   value={maxPages}
                   onChange={e => setMaxPages(Number(e.target.value))}
-                  className="text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:border-violet-400"
+                  className="text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:border-amber-400"
                 >
                   {[3, 5, 8, 10, 15].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
@@ -212,8 +324,8 @@ function ScraperSection({ onImport }) {
         {/* Loading step indicator */}
         {loading && step && (
           <div className="flex items-center gap-2 px-3 py-2 bg-violet-50 rounded-lg">
-            <Loader size={12} className="animate-spin text-violet-500 flex-shrink-0" />
-            <span className="text-xs text-violet-600">{step}</span>
+            <Loader size={12} className="animate-spin text-amber-600 flex-shrink-0" />
+            <span className="text-xs text-amber-700">{step}</span>
           </div>
         )}
 
@@ -258,7 +370,7 @@ function ScraperSection({ onImport }) {
               <button
                 onClick={handleImport}
                 disabled={selectedCount === 0}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-500 hover:bg-violet-600 text-white text-xs font-medium rounded-lg disabled:opacity-40 transition-colors"
+                className="btn-gold"
               >
                 <Plus size={11} />
                 Importar {selectedCount > 0 ? `${selectedCount} seleccionado${selectedCount !== 1 ? 's' : ''}` : ''}
@@ -274,7 +386,7 @@ function ScraperSection({ onImport }) {
                   type="checkbox"
                   checked={!!selected[i]}
                   onChange={e => setSelected(s => ({ ...s, [i]: e.target.checked }))}
-                  className="mt-0.5 w-3.5 h-3.5 rounded accent-violet-500 flex-shrink-0"
+                  className="mt-0.5 w-3.5 h-3.5 rounded accent-amber-600 flex-shrink-0"
                 />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-gray-800">{doc.title}</p>
@@ -313,7 +425,7 @@ function DocCard({ doc, onDelete, onEdit }) {
       <div className="flex items-center gap-3 px-4 py-3">
         <FileText size={14} className="text-violet-400 flex-shrink-0" />
         {editing ? (
-          <input className="flex-1 text-sm font-medium text-gray-800 border-b border-violet-300 focus:outline-none py-0.5"
+          <input className="flex-1 text-sm font-medium text-gray-800 border-b border-amber-300 focus:outline-none py-0.5"
             value={title} onChange={e => setTitle(e.target.value)} autoFocus />
         ) : (
           <span className="flex-1 text-sm font-medium text-gray-800 truncate">{doc.title}</span>
@@ -330,12 +442,12 @@ function DocCard({ doc, onDelete, onEdit }) {
         <div className="px-4 pb-4 border-t border-gray-50 pt-3 space-y-2">
           {editing ? (
             <>
-              <textarea className="w-full text-sm text-gray-600 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-violet-400 resize-none"
+              <textarea className="w-full text-sm text-gray-600 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-amber-400 resize-none"
                 rows={6} value={content} onChange={e => setContent(e.target.value)} />
               <div className="flex gap-2 justify-end">
                 <button onClick={cancelEdit} className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5">Cancelar</button>
                 <button onClick={handleSave} disabled={saving}
-                  className="flex items-center gap-1.5 text-xs bg-violet-500 hover:bg-violet-600 text-white px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors">
+                  className="btn-gold" style={{padding:"6px 12px",fontSize:"11px"}}>
                   {saving ? <Loader size={11} className="animate-spin" /> : <Save size={11} />} Guardar
                 </button>
               </div>
@@ -343,7 +455,7 @@ function DocCard({ doc, onDelete, onEdit }) {
           ) : (
             <>
               <p className="text-sm text-gray-600 whitespace-pre-wrap">{doc.content}</p>
-              <button onClick={() => setEditing(true)} className="text-xs text-violet-500 hover:text-violet-700 font-medium">Editar</button>
+              <button onClick={() => setEditing(true)} className="text-xs font-medium" style={{ color: 'var(--gold)' }}>Editar</button>
             </>
           )}
         </div>
@@ -378,19 +490,19 @@ function AddNoteModal({ onClose, onSave }) {
             <label className="text-xs font-medium text-gray-600 block mb-1">Título</label>
             <input value={title} onChange={e => setTitle(e.target.value)}
               placeholder="Ej. Productos, FAQ, Cobertura…" autoFocus
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-violet-400" />
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400" />
           </div>
           <div>
             <label className="text-xs font-medium text-gray-600 block mb-1">Contenido</label>
             <textarea value={content} onChange={e => setContent(e.target.value)}
               placeholder="Escribe o pega el contenido aquí…" rows={8}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-violet-400 resize-none" />
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400 resize-none" />
           </div>
         </div>
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
           <button onClick={onClose} className="text-xs text-gray-500 px-4 py-2 hover:text-gray-700">Cancelar</button>
           <button onClick={handleSave} disabled={saving || !title.trim() || !content.trim()}
-            className="flex items-center gap-1.5 text-xs bg-violet-500 hover:bg-violet-600 text-white px-4 py-2 rounded-lg disabled:opacity-50 transition-colors">
+            className="btn-gold">
             {saving ? <Loader size={11} className="animate-spin" /> : <Plus size={11} />} Agregar nota
           </button>
         </div>
@@ -416,7 +528,7 @@ function RuleRow({ rule, index, total, onChange, onRemove, onMove }) {
       </div>
       <span className="text-xs text-gray-400 pt-2.5 w-5 flex-shrink-0 text-right">{index + 1}.</span>
       <textarea value={rule} onChange={e => onChange(index, e.target.value)} rows={2}
-        className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-violet-400 resize-none" />
+        className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400 resize-none" />
       <button onClick={() => onRemove(index)} className="pt-2 text-gray-300 hover:text-red-400 transition-colors flex-shrink-0">
         <X size={14} />
       </button>
@@ -430,20 +542,32 @@ function SideNav({ activeSection }) {
   return (
     <aside className="sticky top-4 w-44 flex-shrink-0 hidden lg:block">
       <nav className="space-y-0.5">
-        {SECTIONS.map(s => (
-          <a
-            key={s.id}
-            href={`#${s.id}`}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors ${
-              activeSection === s.id
-                ? 'bg-violet-50 text-violet-600 font-medium'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <s.icon size={13} />
-            {s.label}
-          </a>
-        ))}
+        {SECTIONS.map(s => {
+          const active = activeSection === s.id
+          return (
+            <a
+              key={s.id}
+              href={`#${s.id}`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '7px 12px',
+                borderRadius: '8px',
+                fontSize: '12px',
+                textDecoration: 'none',
+                fontWeight: active ? 600 : 400,
+                color: active ? 'var(--gold)' : 'var(--text-muted)',
+                background: active ? 'var(--gold-pale)' : 'transparent',
+                borderLeft: active ? '2px solid var(--gold)' : '2px solid transparent',
+                transition: 'all 0.12s',
+              }}
+            >
+              <s.icon size={12} />
+              {s.label}
+            </a>
+          )
+        })}
       </nav>
     </aside>
   )
@@ -579,13 +703,13 @@ export default function Knowledge() {
     <PageShell title="Conocimiento" subtitle="Extractor web · Documentos · Persona · Reglas · Idioma">
       {/* Top bar */}
       <div className="flex items-center justify-between mb-6">
-        <p className="text-xs text-gray-400">
+        <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
           Todo lo que el agente IA sabe sobre tu negocio
         </p>
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 px-4 py-2 bg-violet-500 hover:bg-violet-600 text-white text-xs font-medium rounded-lg disabled:opacity-50 transition-colors"
+          className="btn-gold"
         >
           {saving ? <Loader size={13} className="animate-spin" />
             : saveStatus === 'ok' ? <CheckCircle size={13} />
@@ -594,6 +718,8 @@ export default function Knowledge() {
           {saveStatus === 'ok' ? 'Guardado' : saveStatus === 'error' ? 'Error al guardar' : 'Guardar configuración'}
         </button>
       </div>
+
+      <AgentFlowCard />
 
       <div className="flex gap-8">
         <SideNav activeSection={activeSection} />
@@ -609,11 +735,14 @@ export default function Knowledge() {
               label="Extractor web"
               sub="Analiza tu sitio y genera documentos de conocimiento automáticamente"
             />
+            <AgentNote>
+              El contenido importado se guarda como <strong>Documentos de conocimiento</strong>. El agente los consulta automáticamente con <strong>search_knowledge_base</strong> cuando un cliente hace una pregunta específica sobre tu negocio.
+            </AgentNote>
             <ScraperSection onImport={handleImportDocs} />
 
             <p className="text-[11px] text-gray-400 mt-2">
               La API key se configura en{' '}
-              <a href="/settings" className="text-violet-500 hover:text-violet-700">Ajustes → Proveedor de IA</a>.
+              <a href="/settings" className="text-amber-600 hover:text-amber-800">Ajustes → Proveedor de IA</a>.
               Si está configurada, el extractor usa Claude automáticamente.
             </p>
           </section>
@@ -626,23 +755,29 @@ export default function Knowledge() {
               label="Resumen del negocio"
               sub="El agente siempre ve este texto primero — qué es la empresa, qué vende y el tono"
             />
+            <AgentNote>
+              Este texto se inyecta en el <strong>prompt del sistema</strong> bajo la sección <code style={{ background: 'var(--sand-2)', padding: '1px 5px', borderRadius: '3px', fontSize: '11px' }}>CONTEXTO DEL NEGOCIO</code>. Claude lo recibe <em>antes de cada conversación</em> como base de conocimiento general.
+            </AgentNote>
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
               <textarea
                 value={config.overview || ''}
                 onChange={e => setField('overview', e.target.value)}
                 rows={6}
                 placeholder="Ej. Alamex es una empresa global de elevadores con más de 50 años de experiencia e instalaciones en más de 20 países…"
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-violet-400 resize-none"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400 resize-none"
               />
             </div>
           </section>
 
           {/* ── DOCUMENTS ────────────────────────────────────────── */}
           <section>
+            <AgentNote>
+              Cada documento es una <strong>fuente de verdad</strong> que el agente consulta en tiempo real con <strong>search_knowledge_base</strong>. A diferencia del Resumen (que siempre está en el prompt), los documentos sólo se leen cuando Claude los necesita — lo que ahorra tokens en conversaciones cortas.
+            </AgentNote>
             <div className="flex items-start justify-between mb-4">
               <div id="docs" className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center flex-shrink-0">
-                  <FileText size={15} className="text-violet-500" />
+                  <FileText size={15} className="text-amber-600" />
                 </div>
                 <div>
                   <h2 className="text-sm font-semibold text-gray-800">Documentos de conocimiento</h2>
@@ -651,7 +786,7 @@ export default function Knowledge() {
               </div>
               <button
                 onClick={() => setShowAddNote(true)}
-                className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 hover:border-violet-300 hover:text-violet-600 text-gray-600 text-xs font-medium rounded-lg transition-colors"
+                className="btn-outline"
               >
                 <Plus size={12} /> Agregar nota
               </button>
@@ -680,19 +815,22 @@ export default function Knowledge() {
               label="Persona del agente"
               sub="Nombre, género, tono e identidad — cómo se presenta el agente"
             />
+            <AgentNote>
+              La <strong>Línea de identidad</strong> y la <strong>Descripción</strong> se convierten en las primeras líneas del prompt del sistema — definen quién es el agente. El <strong>Nombre</strong> y <strong>Tono</strong> influyen en cómo Claude construye las respuestas naturalmente.
+            </AgentNote>
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-medium text-gray-600 block mb-1">Nombre del agente</label>
                   <input value={config.agent_name || ''} onChange={e => setField('agent_name', e.target.value)}
                     placeholder="Anna"
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-violet-400" />
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400" />
                   <p className="text-[11px] text-gray-400 mt-0.5">El nombre que usa el agente para sí mismo</p>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-600 block mb-1">Género</label>
                   <select value={config.agent_gender || 'female'} onChange={e => setField('agent_gender', e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-violet-400">
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400">
                     {GENDER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                   <p className="text-[11px] text-gray-400 mt-0.5">Afecta pronombres en español</p>
@@ -704,7 +842,7 @@ export default function Knowledge() {
                   <label className="text-xs font-medium text-gray-600 block mb-1">Empresa</label>
                   <input value={config.company_name || ''} onChange={e => setField('company_name', e.target.value)}
                     placeholder="Alamex"
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-violet-400" />
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400" />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-600 block mb-1">Tono</label>
@@ -714,12 +852,12 @@ export default function Knowledge() {
                       if (e.target.value === '__custom__') { setIsCustomTone(true); setField('tone', '') }
                       else { setIsCustomTone(false); setField('tone', e.target.value) }
                     }}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-violet-400">
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400">
                     {TONE_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                   </select>
                   {isCustomTone && (
                     <input value={config.tone || ''} onChange={e => setField('tone', e.target.value)}
-                      placeholder="Ej. cálido, natural y conciso" className="w-full mt-2 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-violet-400" />
+                      placeholder="Ej. cálido, natural y conciso" className="w-full mt-2 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400" />
                   )}
                 </div>
               </div>
@@ -728,7 +866,7 @@ export default function Knowledge() {
                 <label className="text-xs font-medium text-gray-600 block mb-1">Línea de identidad</label>
                 <textarea value={config.identity_line || ''} onChange={e => setField('identity_line', e.target.value)}
                   rows={2} placeholder="Eres Anna, una persona real del equipo de atención al cliente de Alamex…"
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-violet-400 resize-none" />
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400 resize-none" />
                 <p className="text-[11px] text-gray-400 mt-0.5">La primera línea que define quién es el agente</p>
               </div>
 
@@ -736,7 +874,7 @@ export default function Knowledge() {
                 <label className="text-xs font-medium text-gray-600 block mb-1">Descripción</label>
                 <textarea value={config.agent_description || ''} onChange={e => setField('agent_description', e.target.value)}
                   rows={4} placeholder="Descripción de la personalidad del agente…"
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-violet-400 resize-none" />
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400 resize-none" />
               </div>
 
             </div>
@@ -750,6 +888,9 @@ export default function Knowledge() {
               label="Reglas de comportamiento"
               sub="Instrucciones que el agente siempre sigue, en orden"
             />
+            <AgentNote>
+              Estas reglas se incluyen en el prompt bajo <code style={{ background: 'var(--sand-2)', padding: '1px 5px', borderRadius: '3px', fontSize: '11px' }}>REGLAS DE COMPORTAMIENTO</code>. Úsalas para disparar acciones específicas: <em>"Si el cliente menciona una empresa, llama create_lead"</em>, o para definir límites: <em>"No ofrezcas descuentos sin aprobación"</em>.
+            </AgentNote>
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-3">
               <div className="space-y-2">
                 {(config.behavior_rules || []).map((rule, i) => (
@@ -761,7 +902,8 @@ export default function Knowledge() {
                 <p className="text-xs text-gray-400 text-center py-4">Sin reglas — agrega la primera</p>
               )}
               <button onClick={handleRuleAdd}
-                className="flex items-center gap-1.5 text-xs text-violet-500 hover:text-violet-700 font-medium transition-colors">
+                className="flex items-center gap-1.5 text-xs font-medium transition-colors"
+                style={{ color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer' }}>
                 <Plus size={13} /> Agregar regla
               </button>
             </div>
@@ -775,11 +917,14 @@ export default function Knowledge() {
               label="Idioma"
               sub="Cómo el agente elige el idioma de respuesta"
             />
+            <AgentNote>
+              La política de idioma se agrega al final del prompt del sistema. Con <strong>Espejo</strong>, Claude detecta automáticamente el idioma del cliente y responde en el mismo. Con <strong>Fijo</strong>, siempre usa los idiomas listados (útil para marcas que requieren consistencia).
+            </AgentNote>
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-4">
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Política de idioma</label>
                 <select value={config.language_policy || 'mirror'} onChange={e => setField('language_policy', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-violet-400">
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400">
                   <option value="mirror">Espejo del cliente — responde en el mismo idioma</option>
                   <option value="fixed">Idioma fijo — usa siempre los idiomas soportados</option>
                 </select>
@@ -789,7 +934,7 @@ export default function Knowledge() {
                 <label className="text-xs font-medium text-gray-600 block mb-1">Idiomas soportados</label>
                 <input value={config.supported_languages || ''} onChange={e => setField('supported_languages', e.target.value)}
                   placeholder="es, en, ar"
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-violet-400 font-mono" />
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400 font-mono" />
                 <p className="text-[11px] text-gray-400 mt-0.5">Códigos separados por coma. El idioma de reserva es español.</p>
               </div>
             </div>

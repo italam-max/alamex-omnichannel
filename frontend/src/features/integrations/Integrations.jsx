@@ -139,7 +139,7 @@ function ChannelModal({ channel, onSave, onClose }) {
             <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
               <code className="text-xs text-gray-600 flex-1 truncate">{WEBHOOK_URL}</code>
               <button onClick={() => navigator.clipboard.writeText(WEBHOOK_URL)}
-                className="text-[11px] text-blue-500 hover:text-blue-700 font-medium flex-shrink-0">Copiar</button>
+                className="text-[11px] text-amber-700 hover:text-amber-900 font-medium flex-shrink-0">Copiar</button>
             </div>
           </div>
 
@@ -165,11 +165,22 @@ function ChannelModal({ channel, onSave, onClose }) {
             </p>
             {fields.map((f, i) => {
               if (f.divider) return (
-                <div key={`divider-${i}`} className="pt-2">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Bot size={13} className="text-violet-500" />
-                    <span className="text-xs font-semibold text-violet-600 uppercase tracking-wide">{f.label}</span>
-                    <div className="flex-1 h-px bg-violet-100" />
+                <div key={`divider-${i}`} className="pt-3">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Bot size={13} className="text-amber-600" />
+                    <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">{f.label}</span>
+                    <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+                  </div>
+                  <div style={{
+                    display: 'flex', gap: '8px', padding: '8px 12px',
+                    background: 'var(--gold-vp)', borderLeft: '3px solid var(--gold)',
+                    borderRadius: '0 6px 6px 0', marginBottom: '12px',
+                    fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.5,
+                  }}>
+                    <span>⚡</span>
+                    <span>
+                      El agente usa <strong style={{ color: 'var(--text-mid)' }}>LangGraph ReAct</strong> — razona antes de actuar. La personalidad y reglas se configuran en <strong style={{ color: 'var(--text-mid)' }}>Conocimiento</strong>; aquí controlas el modelo y el traspaso.
+                    </span>
                   </div>
                 </div>
               )
@@ -182,7 +193,7 @@ function ChannelModal({ channel, onSave, onClose }) {
                   <button
                     type="button"
                     onClick={() => setCreds(c => ({ ...c, [f.key]: !c[f.key] }))}
-                    className={`flex-shrink-0 transition-colors ${creds[f.key] ? 'text-violet-500' : 'text-gray-300'}`}
+                    className={`flex-shrink-0 transition-colors ${creds[f.key] ? 'text-amber-600' : 'text-gray-300'}`}
                   >
                     {creds[f.key] ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
                   </button>
@@ -225,7 +236,7 @@ function ChannelModal({ channel, onSave, onClose }) {
                     <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
                       <code className="text-xs text-gray-600 flex-1 truncate">{creds[f.key] || '(se generará al guardar)'}</code>
                       {creds[f.key] && <button onClick={() => navigator.clipboard.writeText(creds[f.key])}
-                        className="text-[11px] text-blue-500 hover:text-blue-700 font-medium flex-shrink-0">Copiar</button>}
+                        className="text-[11px] text-amber-700 hover:text-amber-900 font-medium flex-shrink-0">Copiar</button>}
                     </div>
                   ) : (
                     <input
@@ -264,7 +275,7 @@ function ChannelModal({ channel, onSave, onClose }) {
             <button onClick={onClose} className="px-4 py-2 text-xs text-gray-500 hover:text-gray-700 transition-colors">Cancelar</button>
             <button
               onClick={() => onSave({ ...channel, name, credentials: creds })}
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg transition-colors"
+              className="btn-gold"
             >
               Guardar
             </button>
@@ -295,7 +306,7 @@ function ChannelCard({ channel, onEdit, onToggle, onDelete }) {
         <div className="flex items-center gap-1">
           <button onClick={() => onToggle(channel)} title={channel.is_active ? 'Desactivar' : 'Activar'}
             className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400">
-            {channel.is_active ? <ToggleRight size={18} className="text-blue-500" /> : <ToggleLeft size={18} />}
+            {channel.is_active ? <ToggleRight size={18} className="text-amber-700" /> : <ToggleLeft size={18} />}
           </button>
           <button onClick={() => onEdit(channel)} title="Configurar"
             className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400">
@@ -367,7 +378,7 @@ function AddChannelModal({ onAdd, onClose }) {
         <div className="flex gap-2 justify-end">
           <button onClick={onClose} className="px-4 py-2 text-xs text-gray-500">Cancelar</button>
           <button disabled={!name.trim()} onClick={() => onAdd({ type, name: name.trim() })}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg disabled:opacity-40 transition-colors">
+            className="btn-gold">
             Crear
           </button>
         </div>
@@ -466,7 +477,7 @@ export default function Integrations() {
           </button>
         </div>
         <button onClick={() => setAdding(true)}
-          className="flex items-center gap-1.5 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg transition-colors">
+          className="btn-gold">
           <Plus size={14} />
           Agregar canal
         </button>
@@ -477,16 +488,35 @@ export default function Integrations() {
       )}
 
       {/* Webhook info banner */}
-      <div className="mb-5 bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">
-        <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5 text-blue-600 text-xs font-bold">i</div>
+      <div className="mb-5" style={{
+        background: 'var(--gold-vp)', border: '1px solid rgba(192,155,58,0.3)',
+        borderRadius: '12px', padding: '14px 16px',
+        display: 'flex', alignItems: 'flex-start', gap: '12px',
+      }}>
+        <div style={{
+          width: '22px', height: '22px', borderRadius: '50%',
+          background: 'var(--gold-pale)', color: 'var(--gold)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '11px', fontWeight: 700, flexShrink: 0, marginTop: '2px',
+        }}>i</div>
         <div>
-          <p className="text-sm font-medium text-blue-800 mb-0.5">Un webhook para todos tus canales</p>
-          <div className="flex items-center gap-2">
-            <code className="text-xs text-blue-700 bg-blue-100 px-2 py-0.5 rounded">{WEBHOOK_URL}</code>
+          <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', margin: '0 0 6px' }}>
+            Un webhook para todos tus canales
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <code style={{
+              fontSize: '11px', color: 'var(--text-mid)',
+              background: 'var(--sand-2)', padding: '2px 8px', borderRadius: '4px',
+            }}>{WEBHOOK_URL}</code>
             <button onClick={() => navigator.clipboard.writeText(WEBHOOK_URL)}
-              className="text-xs text-blue-500 hover:text-blue-700 font-medium">Copiar</button>
+              style={{ fontSize: '11px', fontWeight: 600, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer' }}>
+              Copiar
+            </button>
           </div>
-          <p className="text-xs text-blue-500 mt-1">Registra esta misma URL en Meta para cada canal. El sistema identifica el canal por su <code className="bg-blue-100 px-1 rounded">verify_token</code> único.</p>
+          <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '6px 0 0' }}>
+            Registra esta URL en Meta para cada canal. El sistema identifica el canal por su{' '}
+            <code style={{ background: 'var(--sand-2)', padding: '1px 4px', borderRadius: '3px' }}>verify_token</code> único.
+          </p>
         </div>
       </div>
 
@@ -495,7 +525,7 @@ export default function Integrations() {
         <div className="flex flex-col items-center justify-center h-48 text-gray-400 gap-3">
           <MessageSquare size={36} className="text-gray-200" />
           <p className="text-sm">Sin canales configurados</p>
-          <button onClick={() => setAdding(true)} className="text-xs text-blue-500 hover:text-blue-700 font-medium">+ Agregar el primero</button>
+          <button onClick={() => setAdding(true)} className="text-xs text-amber-700 hover:text-amber-800 font-medium">+ Agregar el primero</button>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
