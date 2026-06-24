@@ -14,6 +14,13 @@ function storeSessionId(id) {
   localStorage.setItem(SESSION_KEY, id)
 }
 
+function renderMarkdown(text) {
+  // Bold, line breaks — no external dependency
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br/>')
+}
+
 function ChatBubble({ msg }) {
   const isUser = msg.role === 'customer'
   return (
@@ -26,7 +33,9 @@ function ChatBubble({ msg }) {
       <div className={`max-w-[75%] px-3.5 py-2.5 rounded-2xl text-sm ${
         isUser ? 'bg-amber-500 text-white rounded-tr-sm' : 'bg-white border border-gray-100 text-gray-700 rounded-tl-sm shadow-sm'
       }`}>
-        {msg.content}
+        {isUser
+          ? msg.content
+          : <span dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />}
       </div>
     </div>
   )

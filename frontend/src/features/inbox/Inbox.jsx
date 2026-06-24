@@ -49,6 +49,10 @@ function ConversationItem({ conv, active, onClick }) {
   )
 }
 
+function renderMd(text) {
+  return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>')
+}
+
 function MessageBubble({ msg }) {
   const isCustomer = msg.role === 'customer'
   const isAi = msg.role === 'ai'
@@ -67,7 +71,9 @@ function MessageBubble({ msg }) {
             ? 'bg-white border border-gray-100 text-gray-700 rounded-tl-sm shadow-sm'
             : 'bg-amber-50 border border-amber-200 text-gray-700 rounded-tl-sm'
         }`}>
-          {msg.content}
+          {isAi
+            ? <span dangerouslySetInnerHTML={{ __html: renderMd(msg.content) }} />
+            : msg.content}
         </div>
         {isAi && msg.model_used && (
           <span className="text-[10px] text-purple-400 px-1">IA · {msg.model_used}</span>
