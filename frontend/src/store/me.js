@@ -23,6 +23,7 @@ export const useMe = create((set, get) => ({
   loaded:       false,
   role:         null,
   organization: null,   // { slug, name } — the tenant the user belongs to
+  isSuperuser:  false,  // platform operator (owner) — sees the operator console
   permissions:  MINIMAL_PERMS,
 
   loadMe: async () => {
@@ -33,11 +34,12 @@ export const useMe = create((set, get) => ({
         loaded:       true,
         role:         me.role ?? 'agent',
         organization: me.organization ?? null,
+        isSuperuser:  !!me.is_superuser,
         permissions:  me.is_superuser ? ALL_PERMS : (me.permissions ?? MINIMAL_PERMS),
       })
     } catch {
       // Offline / server error → fail closed to the minimal capability set.
-      set({ loaded: true, role: 'agent', organization: null, permissions: MINIMAL_PERMS })
+      set({ loaded: true, role: 'agent', organization: null, isSuperuser: false, permissions: MINIMAL_PERMS })
     }
   },
 

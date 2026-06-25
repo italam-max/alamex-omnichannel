@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   MessageSquare, LayoutDashboard, Users, BookOpen,
-  Plug, Globe, LogOut, Settings2, ChevronLeft, ChevronRight, UserCog, Inbox,
+  Plug, Globe, LogOut, Settings2, ChevronLeft, ChevronRight, UserCog, Inbox, Building2,
 } from 'lucide-react'
 import { useAuth } from '../../store/auth'
 import { useMe } from '../../store/me'
@@ -40,11 +40,20 @@ export default function Sidebar() {
   const location = useLocation()
   const can = useMe(s => s.can)
   const role = useMe(s => s.role)
+  const isSuperuser = useMe(s => s.isSuperuser)
 
   // Filter items by role permission; drop groups that end up empty.
   const groups = NAV_GROUPS
     .map(g => ({ ...g, items: g.items.filter(it => can(it.perm)) }))
     .filter(g => g.items.length > 0)
+
+  // Operator (owner) console — superuser only, cross-organization.
+  if (isSuperuser) {
+    groups.push({
+      label: 'Operador',
+      items: [{ to: '/operador', icon: Building2, label: 'Empresas' }],
+    })
+  }
 
   const canSettings = can('configure_rules') || can('view_billing')
 
