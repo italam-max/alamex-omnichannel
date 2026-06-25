@@ -23,6 +23,15 @@ class IsAdmin(BasePermission):
         return _role(request) == Agent.ROLE_ADMIN
 
 
+class IsOperator(BasePermission):
+    """Platform operator (owner) — superuser or staff. Cross-org access."""
+    message = 'Requiere permisos de operador.'
+
+    def has_permission(self, request, view):
+        u = request.user
+        return bool(u and u.is_authenticated and (u.is_superuser or u.is_staff))
+
+
 class IsAdminStrict(BasePermission):
     """Admins/superusers only — for ALL methods, including reads (e.g. billing)."""
     message = 'Requiere rol de administrador.'

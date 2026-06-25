@@ -29,6 +29,7 @@ urlpatterns = [
     path('api/health/', health_check, name='health'),
     path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/', include('accounts.operator_urls')),
     path('api/conversations/', include('conversations.urls')),
     path('api/accounts/', include('accounts.urls')),
     path('api/contacts/', include('contacts.urls')),

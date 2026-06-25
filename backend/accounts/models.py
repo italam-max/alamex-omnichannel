@@ -9,10 +9,13 @@ Nothing here is hardcoded into business logic — SLA thresholds, escalation
 email, dashboard alerts and the relevance/anti-spam gate all live in Workspace
 and are edited from the admin UI.
 """
+import secrets
+from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 from .tenancy import TenantOwned
 
 
@@ -54,6 +57,37 @@ class Membership(models.Model):
 
     def __str__(self):
         return f'{self.user} @ {self.organization} ({self.role})'
+
+
+class AccessInvite(models.Model):
+    """A one-time, expiring access link issued by the operator. The invited user
+    follows the link to set their password and enter their organization."""
+    organization = models.ForeignKey(
+        'accounts.Organization', on_delete=models.CASCADE, related_name='invites')
+    user        = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='access_invites')
+    email       = models.EmailField()
+    token       = models.CharField(max_length=64, unique=True, db_index=True)
+    created_at  = models.DateTimeField(auto_now_add=True)
+    expires_at  = models.DateTimeField()
+    accepted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    @classmethod
+    def issue(cls, organization, user, days=14):
+        """Create a fresh invite, invalidating any prior unused ones."""
+        cls.objects.filter(user=user, accepted_at__isnull=True).delete()
+        return cls.objects.create(
+            organization=organization, user=user, email=user.email or user.username,
+            token=secrets.token_urlsafe(32),
+            expires_at=timezone.now() + timedelta(days=days),
+        )
+
+    @property
+    def is_valid(self) -> bool:
+        return self.accepted_at is None and timezone.now() < self.expires_at
 
 
 # ── Workspace: the configurable business-rules record ─────────────────────────
