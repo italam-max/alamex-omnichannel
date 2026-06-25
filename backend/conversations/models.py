@@ -1,3 +1,4 @@
+from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 
 
@@ -6,12 +7,17 @@ class Channel(models.Model):
         ('whatsapp', 'WhatsApp'),
         ('messenger', 'Messenger'),
         ('instagram', 'Instagram'),
+        ('website', 'Website Widget'),
     ]
     name = models.CharField(max_length=100)
     type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     credentials = models.JSONField(default=dict)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # GIN index on credentials allows JSONField lookups without table scan
+        indexes = [GinIndex(fields=['credentials'], name='channel_credentials_gin')]
 
     def __str__(self):
         return f"{self.name} ({self.type})"
@@ -39,8 +45,19 @@ class Conversation(models.Model):
     contact = models.ForeignKey(Contact, on_delete=models.CASCADE, related_name='conversations')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     ai_active = models.BooleanField(default=True)
+    # Human agent currently responsible (set on takeover / reassignment).
+    assigned_to = models.ForeignKey(
+        'accounts.Agent', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='conversations')
+    assigned_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['contact', 'channel', 'status'], name='conv_contact_channel_status'),
+            models.Index(fields=['-updated_at'], name='conv_updated_at_desc'),
+        ]
 
     def __str__(self):
         return f"Conv {self.id} — {self.contact}"
