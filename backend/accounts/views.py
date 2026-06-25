@@ -113,9 +113,9 @@ class SLAAlertViewSet(TenantScopedViewSet, viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='scan')
     def scan(self, request):
-        """Run the SLA engine on demand and return the summary."""
+        """Run the SLA engine for this organization on demand."""
         from .services import scan_sla
-        return Response(scan_sla())
+        return Response(scan_sla(self.organization))
 
     @action(detail=True, methods=['post'], url_path='resolve')
     def resolve(self, request, pk=None):

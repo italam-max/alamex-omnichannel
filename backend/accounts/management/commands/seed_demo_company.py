@@ -13,7 +13,7 @@ each with a login. Idempotent: re-running updates rather than duplicating.
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
-from accounts.models import Agent, Workspace
+from accounts.models import Agent, Membership, Workspace
 from conversations.models import Channel
 from knowledge.models import AIConfig, KnowledgeDoc, CustomTool
 
@@ -45,6 +45,16 @@ class Command(BaseCommand):
                             help='No sembrar la configuración de IA (persona, reglas, documentos).')
 
     def handle(self, *args, **o):
+        # Seed into a dedicated organization (multi-tenant aware). The command
+        # process is short-lived, so binding the context without reset is fine.
+        from django.utils.text import slugify
+        from accounts.models import Organization
+        from accounts.tenancy import current_organization
+        org, _ = Organization.objects.get_or_create(
+            slug=slugify(o['company']) or 'demo', defaults={'name': o['company']})
+        current_organization.set(org)
+        self._org = org
+
         ws = Workspace.get_solo()
         ws.company_name = o['company']
         ws.sla_warning_minutes = o['warning']
@@ -72,8 +82,11 @@ class Command(BaseCommand):
             agent, _ = Agent.objects.update_or_create(
                 user=user,
                 defaults={'display_name': name, 'role': role, 'availability': avail,
-                          'is_active': True, 'max_concurrent': 5},
+                          'is_active': True, 'max_concurrent': 5, 'organization': self._org},
             )
+            Membership.objects.get_or_create(
+                user=user, organization=self._org,
+                defaults={'role': role, 'is_default': True})
             # Agents attend all channels; admins/supervisors too for the demo.
             if channels:
                 agent.channels.set(channels)

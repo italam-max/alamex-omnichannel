@@ -20,7 +20,12 @@ def _get_test_org():
 @pytest.fixture(autouse=True)
 def _bind_default_org(request):
     """Bind a default org for DB tests so created rows are stamped."""
-    if 'db' not in request.fixturenames and 'transactional_db' not in request.fixturenames:
+    uses_db = (
+        'db' in request.fixturenames
+        or 'transactional_db' in request.fixturenames
+        or request.node.get_closest_marker('django_db') is not None
+    )
+    if not uses_db:
         yield None
         return
     from accounts.tenancy import current_organization
