@@ -1,0 +1,124 @@
+"""
+Multi-tenancy primitives (shared schema, row-level).
+
+Design (see plan): every tenant-owned model inherits `TenantOwned` (an
+`organization` FK). The default `objects` manager stays UNSCOPED so migrations,
+the admin, related-manager traversal and per-org background jobs keep working.
+The `tenant` manager auto-scopes to `current_organization` and fails loudly if
+no org is set. The real, auditable security boundary is the DRF layer
+(`TenantScopedViewSet`), which filters by `request.organization` explicitly.
+
+This module must not import other apps' models (uses string FK refs).
+"""
+import contextlib
+import contextvars
+
+from django.db import models
+
+# The organization active for the current request / pipeline run.
+current_organization = contextvars.ContextVar('current_organization', default=None)
+
+
+class TenantContextMissing(RuntimeError):
+    """Raised when the `tenant` manager is used without a current organization."""
+
+
+def get_current_organization():
+    return current_organization.get()
+
+
+@contextlib.contextmanager
+def use_organization(org):
+    """Bind the current organization for the duration of a block (agent/jobs)."""
+    token = current_organization.set(org)
+    try:
+        yield
+    finally:
+        current_organization.reset(token)
+
+
+class TenantManager(models.Manager):
+    """Auto-scopes to the current organization; never returns global rows by
+    accident. Use `objects` for unscoped access (migrations, admin, jobs)."""
+
+    def get_queryset(self):
+        org = current_organization.get()
+        if org is None:
+            raise TenantContextMissing(
+                f'{self.model.__name__}.tenant used without a current organization. '
+                'Use .objects for unscoped access or set the org context.'
+            )
+        return super().get_queryset().filter(organization=org)
+
+
+class TenantOwned(models.Model):
+    """Abstract base: an organization-scoped row.
+
+    `organization` is nullable during the additive rollout (M1 add → M2 backfill
+    → M3 flip to NOT NULL). Do not rely on null in app code after M2."""
+    organization = models.ForeignKey(
+        'accounts.Organization', on_delete=models.CASCADE, related_name='+',
+        null=True, blank=True, db_index=True,
+    )
+
+    # `objects` first → stays the default manager (unscoped). `tenant` opt-in.
+    objects = models.Manager()
+    tenant = TenantManager()
+
+    class Meta:
+        abstract = True
+
+
+# ── Tenant resolution (DRF layer) ─────────────────────────────────
+# JWT auth runs at the DRF view (not in middleware), so the organization is
+# resolved from the authenticated user here, where request.user is reliable.
+
+def org_for_request(request):
+    """Resolve the organization for an authenticated request.
+
+    One user = one organization (current product rule). A superuser may target
+    a specific org with the `X-Organization: <slug>` header (operator support)."""
+    user = getattr(request, 'user', None)
+    if not user or not user.is_authenticated:
+        return None
+
+    from accounts.models import Membership, Organization
+
+    slug = request.headers.get('X-Organization')
+    if slug:
+        if user.is_superuser or Membership.objects.filter(user=user, organization__slug=slug).exists():
+            org = Organization.objects.filter(slug=slug, is_active=True).first()
+            if org:
+                return org
+
+    membership = (Membership.objects.filter(user=user)
+                  .select_related('organization')
+                  .order_by('-is_default', 'id')
+                  .first())
+    return membership.organization if membership else None
+
+
+class TenantScopedViewSet:
+    """Mixin for ModelViewSets: scope reads to the request's organization and
+    stamp it on create. ViewSets with a custom get_queryset should wrap their
+    queryset with `self.scope_to_org(qs)` instead of inheriting get_queryset."""
+
+    @property
+    def organization(self):
+        org = getattr(self.request, '_organization', None)
+        if org is None:
+            org = org_for_request(self.request)
+            self.request._organization = org
+        return org
+
+    def scope_to_org(self, qs):
+        org = self.organization
+        if org is None:
+            return qs.none()
+        return qs.filter(organization=org)
+
+    def get_queryset(self):
+        return self.scope_to_org(super().get_queryset())
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.organization)

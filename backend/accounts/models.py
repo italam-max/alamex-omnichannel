@@ -13,11 +13,52 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
+from .tenancy import TenantOwned
+
+
+# ── Organization: the tenant ──────────────────────────────────────────────────
+
+class Organization(models.Model):
+    """A client tenant. All tenant-owned rows carry an `organization` FK."""
+    name       = models.CharField(max_length=200)
+    slug       = models.SlugField(max_length=80, unique=True)
+    is_active  = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class Membership(models.Model):
+    """Links a user to an organization with an org-scoped role. By current
+    product rule one user has exactly one membership, but the model allows
+    more without rework."""
+    ROLE_CHOICES = [
+        ('admin', 'Administrador'),
+        ('supervisor', 'Supervisor'),
+        ('agent', 'Agente'),
+    ]
+    user         = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='memberships')
+    organization = models.ForeignKey(
+        'accounts.Organization', on_delete=models.CASCADE, related_name='memberships')
+    role         = models.CharField(max_length=12, choices=ROLE_CHOICES, default='agent')
+    is_default   = models.BooleanField(default=True)
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('user', 'organization')]
+
+    def __str__(self):
+        return f'{self.user} @ {self.organization} ({self.role})'
 
 
 # ── Workspace: the configurable business-rules record ─────────────────────────
 
-class Workspace(models.Model):
+class Workspace(TenantOwned):
     """Singleton (pk=1). Holds every per-company business rule."""
 
     company_name = models.CharField(max_length=200, default='Mi Empresa')
@@ -81,7 +122,7 @@ class Workspace(models.Model):
 
 # ── Agent: a human team member ────────────────────────────────────────────────
 
-class Agent(models.Model):
+class Agent(TenantOwned):
     ROLE_ADMIN      = 'admin'
     ROLE_SUPERVISOR = 'supervisor'
     ROLE_AGENT      = 'agent'
@@ -156,7 +197,7 @@ class Agent(models.Model):
 
 # ── SLAAlert: an escalation event ─────────────────────────────────────────────
 
-class SLAAlert(models.Model):
+class SLAAlert(TenantOwned):
     LEVEL_CHOICES = [
         ('warning',   'Aviso'),
         ('critical',  'Crítico'),

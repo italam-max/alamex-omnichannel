@@ -1,8 +1,9 @@
 from django.db import models
+from accounts.tenancy import TenantOwned
 from conversations.models import Contact as ConvContact, Conversation
 
 
-class Lead(models.Model):
+class Lead(TenantOwned):
     STAGE_CHOICES = [
         ('new', 'Nuevo'),
         ('contacted', 'Contactado'),
@@ -22,7 +23,7 @@ class Lead(models.Model):
         return f"Lead {self.contact} — {self.stage}"
 
 
-class FollowUp(models.Model):
+class FollowUp(TenantOwned):
     PRIORITY_CHOICES = [
         ('low', 'Baja'),
         ('medium', 'Media'),

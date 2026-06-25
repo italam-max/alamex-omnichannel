@@ -1,8 +1,9 @@
 from django.contrib.postgres.indexes import GinIndex
 from django.db import models
+from accounts.tenancy import TenantOwned
 
 
-class Channel(models.Model):
+class Channel(TenantOwned):
     TYPE_CHOICES = [
         ('whatsapp', 'WhatsApp'),
         ('messenger', 'Messenger'),
@@ -23,7 +24,7 @@ class Channel(models.Model):
         return f"{self.name} ({self.type})"
 
 
-class Contact(models.Model):
+class Contact(TenantOwned):
     name = models.CharField(max_length=200)
     phone = models.CharField(max_length=30, blank=True)
     email = models.EmailField(blank=True)
@@ -35,7 +36,7 @@ class Contact(models.Model):
         return self.name
 
 
-class Conversation(models.Model):
+class Conversation(TenantOwned):
     STATUS_CHOICES = [
         ('active', 'Activa'),
         ('human_takeover', 'Atención humana'),
@@ -63,7 +64,7 @@ class Conversation(models.Model):
         return f"Conv {self.id} — {self.contact}"
 
 
-class Message(models.Model):
+class Message(TenantOwned):
     ROLE_CHOICES = [
         ('customer', 'Cliente'),
         ('ai', 'IA'),

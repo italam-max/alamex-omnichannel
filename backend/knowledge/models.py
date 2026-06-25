@@ -2,6 +2,7 @@ import re
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from accounts.tenancy import TenantOwned
 
 # Tool names reserved by the platform — custom tools may never shadow them.
 RESERVED_TOOL_NAMES = {
@@ -10,7 +11,7 @@ RESERVED_TOOL_NAMES = {
 TOOL_NAME_RE = re.compile(r'^[a-z][a-z0-9_]{2,40}$')
 
 
-class KnowledgeDoc(models.Model):
+class KnowledgeDoc(TenantOwned):
     title = models.CharField(max_length=300)
     content = models.TextField()
     is_active = models.BooleanField(default=True)
@@ -25,7 +26,7 @@ class KnowledgeDoc(models.Model):
         return self.title
 
 
-class AIConfig(models.Model):
+class AIConfig(TenantOwned):
     """Singleton — always pk=1. Stores the global AI persona + knowledge settings."""
     # Knowledge overview
     overview = models.TextField(blank=True)
@@ -64,7 +65,7 @@ class AIConfig(models.Model):
         return obj
 
 
-class CustomTool(models.Model):
+class CustomTool(TenantOwned):
     """
     A tenant-defined agent tool. Declarative only — the tenant configures an
     instance of a platform-defined *archetype*; the agent never runs tenant code.
@@ -125,7 +126,7 @@ class CustomTool(models.Model):
             raise ValidationError({'is_active': 'Un webhook debe ser aprobado antes de activarse.'})
 
 
-class CustomToolRun(models.Model):
+class CustomToolRun(TenantOwned):
     """Audit + data-capture record for every custom tool invocation."""
     STATUS_OK    = 'ok'
     STATUS_ERROR = 'error'
