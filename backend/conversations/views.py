@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.conf import settings
 
+from accounts.tenancy import TenantScopedViewSet
 from .models import Channel, Contact, Conversation, Message
 from .serializers import ChannelSerializer, ContactSerializer, ConversationSerializer, MessageSerializer
 
@@ -18,7 +19,7 @@ def _coerce_bool(value) -> bool:
     return str(value).strip().lower() in ('true', '1', 'yes', 'on')
 
 
-class ChannelViewSet(viewsets.ModelViewSet):
+class ChannelViewSet(TenantScopedViewSet, viewsets.ModelViewSet):
     queryset = Channel.objects.all().order_by('id')
     serializer_class = ChannelSerializer
     permission_classes = [IsAuthenticated]
@@ -76,13 +77,13 @@ class ChannelViewSet(viewsets.ModelViewSet):
             return Response({'ok': False, 'detail': str(e)}, status=status.HTTP_502_BAD_GATEWAY)
 
 
-class ContactViewSet(viewsets.ReadOnlyModelViewSet):
+class ContactViewSet(TenantScopedViewSet, viewsets.ReadOnlyModelViewSet):
     queryset = Contact.objects.select_related('channel').all()
     serializer_class = ContactSerializer
     permission_classes = [IsAuthenticated]
 
 
-class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
+class ConversationViewSet(TenantScopedViewSet, viewsets.ReadOnlyModelViewSet):
     queryset = (Conversation.objects
                 .select_related('channel', 'contact', 'assigned_to')
                 .prefetch_related('messages')
@@ -109,7 +110,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
 
         if params.get('status'):
             qs = qs.filter(status=params['status'])
-        return qs
+        return self.scope_to_org(qs)
 
     @action(detail=True, methods=['patch'], url_path='update')
     def partial_update_conversation(self, request, pk=None):
@@ -182,6 +183,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
             conversation=conversation,
             role='agent',
             content=content,
+            organization=conversation.organization,
         )
         # Replying clears any open SLA alert — the customer is no longer waiting.
         from accounts.models import SLAAlert
@@ -189,7 +191,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(MessageSerializer(msg).data, status=status.HTTP_201_CREATED)
 
 
-class MessageViewSet(viewsets.ReadOnlyModelViewSet):
+class MessageViewSet(TenantScopedViewSet, viewsets.ReadOnlyModelViewSet):
     queryset = Message.objects.select_related('conversation').all()
     serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated]

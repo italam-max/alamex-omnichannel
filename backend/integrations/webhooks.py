@@ -91,10 +91,11 @@ CHANNEL_FINDERS = {
 # ── Conversation / message persistence ───────────────────────────
 
 def _get_or_create_conversation(channel: Channel, external_id: str, sender_name: str = "") -> tuple:
+    org_id = channel.organization_id
     contact, _ = Contact.objects.get_or_create(
         external_id=external_id,
         channel=channel,
-        defaults={"name": sender_name or external_id},
+        defaults={"name": sender_name or external_id, "organization_id": org_id},
     )
     conversation = Conversation.objects.filter(
         contact=contact,
@@ -103,14 +104,16 @@ def _get_or_create_conversation(channel: Channel, external_id: str, sender_name:
     ).order_by("-updated_at").first()
     if not conversation:
         conversation = Conversation.objects.create(
-            contact=contact, channel=channel, status="active", ai_active=True
+            contact=contact, channel=channel, status="active", ai_active=True,
+            organization_id=org_id,
         )
     return conversation, contact
 
 
 def _save_message(conversation: Conversation, role: str, content: str, model_used: str = '') -> Message:
     return Message.objects.create(
-        conversation=conversation, role=role, content=content, model_used=model_used
+        conversation=conversation, role=role, content=content, model_used=model_used,
+        organization_id=conversation.organization_id,
     )
 
 

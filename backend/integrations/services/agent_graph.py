@@ -17,7 +17,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
 from .agent_state import AgentState, MAX_ITERATIONS
-from .agent_tools import AGENT_TOOLS
+from .agent_tools import AGENT_TOOLS, core_tools as _core_tools
 
 logger = logging.getLogger(__name__)
 
@@ -143,11 +143,13 @@ def _deduct_credits(channel, model: str, input_tokens: int, output_tokens: int, 
         from billing.models import CreditAccount, CreditTransaction
         from django.db import transaction as db_tx
 
+        from accounts.tenancy import get_current_organization
+        org = get_current_organization()
         with db_tx.atomic():
-            # Ensure the singleton row exists, then lock it inside the txn so the
-            # read-modify-write is serialized against concurrent deductions.
-            CreditAccount.objects.get_or_create(pk=1)
-            account = CreditAccount.objects.select_for_update().get(pk=1)
+            # Lock the org's account inside the txn so the read-modify-write is
+            # serialized against concurrent deductions.
+            CreditAccount.objects.get_or_create(organization=org)
+            account = CreditAccount.objects.select_for_update().get(organization=org)
 
             cost = account.compute_cost(model, input_tokens, output_tokens)
             # The transaction records the true cost; the stored balance never
@@ -169,6 +171,7 @@ def _deduct_credits(channel, model: str, input_tokens: int, output_tokens: int, 
                 output_tokens=output_tokens,
                 channel_id=channel.id,
                 description=desc,
+                organization=org,
             )
             if new_balance <= account.alert_threshold_usd:
                 logger.warning('[Credits] Low balance: $%.4f USD remaining', new_balance)
@@ -350,22 +353,29 @@ def _build_graph(tools):
 _graph_cache: dict = {}
 
 
-def _get_graph():
-    """Return a compiled graph for the current core + active custom tools."""
+def _get_graph(organization):
+    """Return a compiled graph scoped to `organization`. Tools capture the org
+    in their closures (built here, in the main thread) so scoping is correct
+    even though ToolNode executes tools in worker threads where the org
+    ContextVar may not propagate. Cached per org; never reused across orgs."""
+    org_id = organization.id if organization else None
     try:
         from .custom_tools import build_custom_tools, active_tools_signature
-        sig = active_tools_signature()
-        cached = _graph_cache.get(sig)
+        sig = active_tools_signature(organization)
+        key = (org_id, sig)
+        cached = _graph_cache.get(key)
         if cached is not None:
             return cached
-        tools = AGENT_TOOLS + build_custom_tools()
+        tools = _core_tools(organization) + build_custom_tools(organization)
     except Exception as exc:
         logger.error('[Agent] custom tools unavailable, using core only: %s', exc)
-        sig, tools = 'core-only', AGENT_TOOLS
+        key, tools = (org_id, 'core-only'), _core_tools(organization)
 
     graph = _build_graph(tools)
-    _graph_cache.clear()           # single-tenant: keep only the latest
-    _graph_cache[sig] = graph
+    # Keep only the latest graph per org (drop this org's stale entries).
+    for k in [k for k in _graph_cache if k[0] == org_id]:
+        del _graph_cache[k]
+    _graph_cache[key] = graph
     return graph
 
 
@@ -381,6 +391,14 @@ def run_agent(channel, conversation, incoming_text: str) -> tuple:
         logger.warning('[Agent] ANTHROPIC_API_KEY not set')
         return None, False
 
+    # Everything below runs in the channel's organization context: config,
+    # knowledge, custom tools, credits and the graph cache all scope to it.
+    from accounts.tenancy import use_organization
+    with use_organization(channel.organization):
+        return _run_agent_scoped(channel, conversation, incoming_text)
+
+
+def _run_agent_scoped(channel, conversation, incoming_text: str) -> tuple:
     if not _has_funds():
         logger.warning('[Agent] Insufficient credits for channel %s', channel.id)
         return None, False
@@ -447,7 +465,7 @@ def run_agent(channel, conversation, incoming_text: str) -> tuple:
     from .custom_tools import current_conversation_id
     token = current_conversation_id.set(conversation.id)
     try:
-        final_state = _get_graph().invoke(initial_state)
+        final_state = _get_graph(channel.organization).invoke(initial_state)
     except Exception as exc:
         logger.error('[Agent] Graph error for channel %s: %s', channel.id, exc)
         return None, False

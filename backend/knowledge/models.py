@@ -60,9 +60,17 @@ class AIConfig(TenantOwned):
         verbose_name = 'AI Configuration'
 
     @classmethod
-    def get_solo(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
+    def get_for_org(cls, organization):
+        obj, _ = cls.objects.get_or_create(organization=organization)
         return obj
+
+    @classmethod
+    def get_solo(cls):
+        from accounts.tenancy import get_current_organization
+        org = get_current_organization()
+        if org is not None:
+            return cls.get_for_org(org)
+        return cls.objects.order_by('pk').first() or cls.objects.create()
 
 
 class CustomTool(TenantOwned):

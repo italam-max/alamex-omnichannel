@@ -1,7 +1,14 @@
 from rest_framework import serializers
+from accounts.tenancy import get_current_organization
 from .models import KnowledgeDoc, AIConfig, CustomTool, CustomToolRun, RESERVED_TOOL_NAMES, TOOL_NAME_RE
 
 _VALID_PARAM_TYPES = {'string', 'number', 'integer', 'boolean'}
+
+
+def _org_scoped(qs):
+    """Filter a queryset by the current organization (set by the view layer)."""
+    org = get_current_organization()
+    return qs.filter(organization=org) if org is not None else qs
 
 
 class KnowledgeDocSerializer(serializers.ModelSerializer):
@@ -48,7 +55,7 @@ class CustomToolSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Usa snake_case: 3-41 letras/números/_ , empieza con letra.')
         if value in RESERVED_TOOL_NAMES:
             raise serializers.ValidationError(f'"{value}" es una herramienta del sistema.')
-        qs = CustomTool.objects.filter(name=value)
+        qs = _org_scoped(CustomTool.objects.filter(name=value))
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
@@ -84,11 +91,11 @@ class CustomToolSerializer(serializers.ModelSerializer):
             if not (config.get('text') or config.get('doc_id')):
                 raise serializers.ValidationError({'config': 'Configura un texto o un documento.'})
 
-        # Plan limit — only when creating a new tool.
+        # Plan limit — only when creating a new tool (per organization).
         if self.instance is None:
             from accounts.models import Workspace
             limit = Workspace.get_solo().max_custom_tools
-            if CustomTool.objects.count() >= limit:
+            if _org_scoped(CustomTool.objects.all()).count() >= limit:
                 raise serializers.ValidationError(
                     f'Alcanzaste el límite de {limit} herramientas de tu plan.')
         return data

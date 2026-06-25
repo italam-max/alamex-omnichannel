@@ -10,27 +10,28 @@ from conversations.models import Conversation
 from .models import Agent, SLAAlert, Workspace
 from .permissions import IsAdmin, IsSupervisorOrAdmin
 from .serializers import AgentSerializer, SLAAlertSerializer, WorkspaceSerializer
+from .tenancy import TenantScopedViewSet, org_for_request
 
 User = get_user_model()
 
 
 class WorkspaceViewSet(viewsets.ViewSet):
-    """Singleton config. GET for any authenticated user; PATCH for admins."""
+    """Per-org business-rules config. GET for any member; PATCH for admins."""
     permission_classes = [IsAdmin]
 
     def list(self, request):
-        return Response(WorkspaceSerializer(Workspace.get_solo()).data)
+        return Response(WorkspaceSerializer(Workspace.get_for_org(org_for_request(request))).data)
 
     @action(detail=False, methods=['patch', 'put'], url_path='update')
     def update_rules(self, request):
-        ws = Workspace.get_solo()
+        ws = Workspace.get_for_org(org_for_request(request))
         ser = WorkspaceSerializer(ws, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         ser.save()
         return Response(ser.data)
 
 
-class AgentViewSet(viewsets.ModelViewSet):
+class AgentViewSet(TenantScopedViewSet, viewsets.ModelViewSet):
     queryset = Agent.objects.select_related('user').prefetch_related('channels').all()
     serializer_class = AgentSerializer
     permission_classes = [IsAdmin]
@@ -40,6 +41,17 @@ class AgentViewSet(viewsets.ModelViewSet):
         if self.action in ('list', 'retrieve', 'me', 'set_availability'):
             return [IsAuthenticated()]
         return [IsAdmin()]
+
+    def perform_create(self, serializer):
+        """Stamp the org and give the new agent's user a membership so they can
+        log in and be scoped to this organization."""
+        from .models import Membership
+        org = self.organization
+        agent = serializer.save(organization=org)
+        if org is not None and agent.user_id:
+            Membership.objects.get_or_create(
+                user=agent.user, organization=org,
+                defaults={'role': agent.role, 'is_default': True})
 
     def perform_destroy(self, instance):
         """Deactivate instead of hard-deleting — preserves conversation history."""
@@ -51,17 +63,22 @@ class AgentViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def me(self, request):
+        org = org_for_request(request)
+        org_data = {'slug': org.slug, 'name': org.name} if org else None
         profile = getattr(request.user, 'agent_profile', None)
         if not profile:
             # Superuser without an Agent row → synthesize an admin identity.
             return Response({
                 'id': None, 'name': request.user.get_username(),
                 'role': 'admin', 'is_superuser': True,
+                'organization': org_data,
                 'permissions': {k: True for k in (
                     'manage_agents', 'configure_rules', 'manage_channels',
                     'view_all_convs', 'reassign', 'view_billing', 'attend_convs')},
             })
-        return Response(AgentSerializer(profile).data)
+        data = AgentSerializer(profile).data
+        data['organization'] = org_data
+        return Response(data)
 
     @action(detail=True, methods=['patch'], url_path='availability')
     def set_availability(self, request, pk=None):
@@ -83,7 +100,7 @@ class AgentViewSet(viewsets.ModelViewSet):
         return Response(AgentSerializer(agent).data)
 
 
-class SLAAlertViewSet(viewsets.ReadOnlyModelViewSet):
+class SLAAlertViewSet(TenantScopedViewSet, viewsets.ReadOnlyModelViewSet):
     serializer_class = SLAAlertSerializer
     permission_classes = [IsSupervisorOrAdmin]
 
@@ -92,7 +109,7 @@ class SLAAlertViewSet(viewsets.ReadOnlyModelViewSet):
             'conversation__contact', 'conversation__channel', 'conversation__assigned_to').all()
         if self.request.query_params.get('open') == 'true':
             qs = qs.filter(resolved=False)
-        return qs
+        return self.scope_to_org(qs)
 
     @action(detail=False, methods=['post'], url_path='scan')
     def scan(self, request):
@@ -117,14 +134,15 @@ class ReassignView(viewsets.ViewSet):
     permission_classes = [IsSupervisorOrAdmin]
 
     def create(self, request):
+        org = org_for_request(request)
         conv_id  = request.data.get('conversation')
         agent_id = request.data.get('agent')
         try:
-            conv = Conversation.objects.get(pk=conv_id)
+            conv = Conversation.objects.get(pk=conv_id, organization=org)
         except Conversation.DoesNotExist:
             return Response({'detail': 'Conversación no encontrada'}, status=404)
         try:
-            agent = Agent.objects.get(pk=agent_id, is_active=True)
+            agent = Agent.objects.get(pk=agent_id, is_active=True, organization=org)
         except Agent.DoesNotExist:
             return Response({'detail': 'Agente no válido'}, status=400)
 
@@ -145,11 +163,12 @@ class TeamStatsView(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
 
     def list(self, request):
-        agents = Agent.objects.filter(is_active=True)
+        org = org_for_request(request)
+        agents = Agent.objects.filter(is_active=True, organization=org)
         return Response({
             'agents_total':   agents.count(),
             'agents_online':  agents.filter(availability=Agent.AVAIL_ONLINE).count(),
-            'open_alerts':    SLAAlert.objects.filter(resolved=False).count(),
-            'escalated':      SLAAlert.objects.filter(resolved=False, level='escalated').count(),
-            'human_waiting':  Conversation.objects.filter(status='human_takeover').count(),
+            'open_alerts':    SLAAlert.objects.filter(resolved=False, organization=org).count(),
+            'escalated':      SLAAlert.objects.filter(resolved=False, level='escalated', organization=org).count(),
+            'human_waiting':  Conversation.objects.filter(status='human_takeover', organization=org).count(),
         })

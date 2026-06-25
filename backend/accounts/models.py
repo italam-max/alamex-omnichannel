@@ -105,9 +105,18 @@ class Workspace(TenantOwned):
         return f'Workspace: {self.company_name}'
 
     @classmethod
-    def get_solo(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
+    def get_for_org(cls, organization):
+        obj, _ = cls.objects.get_or_create(organization=organization)
         return obj
+
+    @classmethod
+    def get_solo(cls):
+        # Transitional shim: prefer the current-org row; fall back to first row.
+        from .tenancy import get_current_organization
+        org = get_current_organization()
+        if org is not None:
+            return cls.get_for_org(org)
+        return cls.objects.order_by('pk').first() or cls.objects.create()
 
     def tier_for_wait(self, wait_minutes: int) -> str:
         """Map an elapsed wait (minutes) to an SLA tier name."""

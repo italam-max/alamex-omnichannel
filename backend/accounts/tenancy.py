@@ -68,6 +68,16 @@ class TenantOwned(models.Model):
     class Meta:
         abstract = True
 
+    def save(self, *args, **kwargs):
+        # Auto-stamp the current organization when none was set explicitly.
+        # Views/webhook/widget set it explicitly; this covers deep pipeline
+        # creates (leads, follow-ups, messages, tool runs) and tests.
+        if self.organization_id is None:
+            org = current_organization.get()
+            if org is not None:
+                self.organization = org
+        super().save(*args, **kwargs)
+
 
 # ── Tenant resolution (DRF layer) ─────────────────────────────────
 # JWT auth runs at the DRF view (not in middleware), so the organization is
@@ -95,7 +105,12 @@ def org_for_request(request):
                   .select_related('organization')
                   .order_by('-is_default', 'id')
                   .first())
-    return membership.organization if membership else None
+    if membership:
+        return membership.organization
+    # Fallback to an already-bound org context. In production this is unset
+    # during resolution (so a user without a membership resolves to None and
+    # sees nothing — fail closed); test setup binds a default org here.
+    return current_organization.get()
 
 
 class TenantScopedViewSet:
@@ -110,6 +125,19 @@ class TenantScopedViewSet:
             org = org_for_request(self.request)
             self.request._organization = org
         return org
+
+    def initial(self, request, *args, **kwargs):
+        # Runs after DRF authentication, so request.user is reliable here.
+        super().initial(request, *args, **kwargs)
+        self._org_token = current_organization.set(self.organization)
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        token = getattr(self, '_org_token', None)
+        if token is not None:
+            current_organization.reset(token)
+            self._org_token = None
+        return response
 
     def scope_to_org(self, qs):
         org = self.organization
