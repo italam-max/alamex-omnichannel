@@ -24,11 +24,17 @@ def account_view(request):
     # PATCH — only billing config fields (not balance)
     allowed = {'markup_multiplier', 'alert_threshold_usd'}
     updates = {k: v for k, v in request.data.items() if k in allowed}
+    if not updates:
+        return Response({'error': 'Campos permitidos: markup_multiplier, alert_threshold_usd.'},
+                        status=status.HTTP_400_BAD_REQUEST)
     for field, value in updates.items():
         try:
-            setattr(account, field, Decimal(str(value)))
+            dec = Decimal(str(value))
         except (InvalidOperation, TypeError):
             return Response({'error': f'Valor inválido para {field}'}, status=status.HTTP_400_BAD_REQUEST)
+        if dec < 0:
+            return Response({'error': f'{field} no puede ser negativo'}, status=status.HTTP_400_BAD_REQUEST)
+        setattr(account, field, dec)
     account.save(update_fields=list(updates.keys()) + ['updated_at'])
     return Response(CreditAccountSerializer(account).data)
 
@@ -47,8 +53,9 @@ def topup_view(request):
     description = (request.data.get('description') or f'Recarga manual').strip()[:300]
 
     with db_transaction.atomic():
-        account = CreditAccount.objects.select_for_update().get(pk=1) if CreditAccount.objects.exists() \
-            else CreditAccount.get_solo()
+        # Ensure the singleton exists, then lock it — no TOCTOU race.
+        CreditAccount.objects.get_or_create(pk=1)
+        account = CreditAccount.objects.select_for_update().get(pk=1)
         account.balance_usd += amount
         account.save(update_fields=['balance_usd', 'updated_at'])
         tx = CreditTransaction.objects.create(

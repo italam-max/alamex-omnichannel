@@ -11,6 +11,13 @@ from .serializers import ChannelSerializer, ContactSerializer, ConversationSeria
 GRAPH_URL = "https://graph.facebook.com/v21.0"
 
 
+def _coerce_bool(value) -> bool:
+    """Accept real bools or common truthy strings ('true', '1', 'yes', 'on')."""
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ('true', '1', 'yes', 'on')
+
+
 class ChannelViewSet(viewsets.ModelViewSet):
     queryset = Channel.objects.all().order_by('id')
     serializer_class = ChannelSerializer
@@ -106,13 +113,30 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=['patch'], url_path='update')
     def partial_update_conversation(self, request, pk=None):
-        """Allow toggling ai_active and updating status from the Inbox."""
+        """Toggle ai_active and/or update status from the Inbox (validated)."""
         conversation = self.get_object()
-        allowed_fields = {'ai_active', 'status'}
-        data = {k: v for k, v in request.data.items() if k in allowed_fields}
-        for field, value in data.items():
+        updates = {}
+
+        if 'status' in request.data:
+            new_status = request.data['status']
+            valid = {c[0] for c in Conversation.STATUS_CHOICES}
+            if new_status not in valid:
+                return Response(
+                    {'detail': f'status inválido. Opciones: {", ".join(sorted(valid))}.'},
+                    status=status.HTTP_400_BAD_REQUEST)
+            updates['status'] = new_status
+
+        if 'ai_active' in request.data:
+            updates['ai_active'] = _coerce_bool(request.data['ai_active'])
+
+        if not updates:
+            return Response(
+                {'detail': 'Nada que actualizar. Campos permitidos: status, ai_active.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        for field, value in updates.items():
             setattr(conversation, field, value)
-        conversation.save(update_fields=list(data.keys()))
+        conversation.save(update_fields=list(updates.keys()) + ['updated_at'])
         return Response(ConversationSerializer(conversation).data)
 
     @action(detail=True, methods=['post'], url_path='claim')

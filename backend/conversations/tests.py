@@ -95,3 +95,51 @@ class TestChannelViewSet:
         assert response.status_code == 200
         whatsapp_channel.refresh_from_db()
         assert whatsapp_channel.credentials['access_token'] == 'real_token'
+
+
+# ── Conversation update validation (hardening) ────────────────────
+
+@pytest.fixture
+def conversation(db, whatsapp_channel):
+    from conversations.models import Contact, Conversation
+    contact = Contact.objects.create(name='Cliente', channel=whatsapp_channel)
+    return Conversation.objects.create(
+        channel=whatsapp_channel, contact=contact, status='active', ai_active=True)
+
+
+@pytest.mark.django_db
+class TestConversationUpdateValidation:
+    def _url(self, conv):
+        return f'/api/conversations/{conv.id}/update/'
+
+    def test_rejects_invalid_status(self, api_client, conversation):
+        r = api_client.patch(self._url(conversation), {'status': 'bogus'}, format='json')
+        assert r.status_code == 400
+        conversation.refresh_from_db()
+        assert conversation.status == 'active'  # unchanged
+
+    def test_accepts_valid_status(self, api_client, conversation):
+        r = api_client.patch(self._url(conversation), {'status': 'human_takeover'}, format='json')
+        assert r.status_code == 200
+        conversation.refresh_from_db()
+        assert conversation.status == 'human_takeover'
+
+    def test_coerces_ai_active_string(self, api_client, conversation):
+        r = api_client.patch(self._url(conversation), {'ai_active': 'false'}, format='json')
+        assert r.status_code == 200
+        conversation.refresh_from_db()
+        assert conversation.ai_active is False
+
+    def test_empty_payload_rejected(self, api_client, conversation):
+        r = api_client.patch(self._url(conversation), {'foo': 'bar'}, format='json')
+        assert r.status_code == 400
+
+
+@pytest.mark.django_db
+class TestHealthCheck:
+    def test_health_ok_with_db(self):
+        client = APIClient()  # unauthenticated — probe must be public
+        r = client.get('/api/health/')
+        assert r.status_code == 200
+        assert r.json()['status'] == 'ok'
+        assert r.json()['database'] == 'up'

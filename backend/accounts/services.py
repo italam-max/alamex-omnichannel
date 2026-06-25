@@ -21,9 +21,16 @@ def conversation_wait_minutes(conversation) -> int:
 
     A conversation is "waiting" only when its most recent message came from the
     customer. If an agent already replied, the wait is 0.
+
+    Uses the prefetched `messages` cache when available (see scan_sla) and sorts
+    in Python — calling `.order_by()` here would bypass the prefetch and issue a
+    query per conversation (N+1).
     """
-    last = conversation.messages.order_by('-created_at').first()
-    if not last or last.role != 'customer':
+    messages = list(conversation.messages.all())
+    if not messages:
+        return 0
+    last = max(messages, key=lambda m: m.created_at)
+    if last.role != 'customer':
         return 0
     delta = timezone.now() - last.created_at
     return max(0, int(delta.total_seconds() // 60))

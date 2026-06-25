@@ -1,11 +1,27 @@
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.db import connection
 from django.http import JsonResponse
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 
 def health_check(request):
-    return JsonResponse({"status": "ok"})
+    """Liveness/readiness probe — verifies DB connectivity (503 if down)."""
+    db_ok = True
+    try:
+        with connection.cursor() as cur:
+            cur.execute('SELECT 1')
+            cur.fetchone()
+    except Exception:
+        db_ok = False
+
+    payload = {
+        'status': 'ok' if db_ok else 'degraded',
+        'database': 'up' if db_ok else 'down',
+        'ai_configured': bool(getattr(settings, 'ANTHROPIC_API_KEY', '')),
+    }
+    return JsonResponse(payload, status=200 if db_ok else 503)
 
 
 urlpatterns = [
