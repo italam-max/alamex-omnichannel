@@ -40,9 +40,11 @@ def channel(db):
 @pytest.mark.django_db
 class TestWorkspace:
     def test_solo_creates_singleton(self):
+        # Per-org now: get_solo() resolves to the current org's single workspace.
         a = Workspace.get_solo()
         b = Workspace.get_solo()
-        assert a.pk == b.pk == 1
+        assert a.pk == b.pk
+        assert a.organization_id == b.organization_id is not None
 
     def test_tier_thresholds_are_used(self):
         ws = Workspace.get_solo()

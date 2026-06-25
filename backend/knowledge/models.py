@@ -58,6 +58,9 @@ class AIConfig(TenantOwned):
 
     class Meta:
         verbose_name = 'AI Configuration'
+        constraints = [
+            models.UniqueConstraint(fields=['organization'], name='uniq_aiconfig_org'),
+        ]
 
     @classmethod
     def get_for_org(cls, organization):
@@ -116,6 +119,10 @@ class CustomTool(TenantOwned):
 
     class Meta:
         ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization', 'name'], name='uniq_customtool_org_name'),
+        ]
 
     def __str__(self):
         return f'{self.name} ({self.archetype})'

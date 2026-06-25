@@ -22,6 +22,9 @@ class CreditAccount(TenantOwned):
 
     class Meta:
         verbose_name = 'Credit Account'
+        constraints = [
+            models.UniqueConstraint(fields=['organization'], name='uniq_creditaccount_org'),
+        ]
 
     @classmethod
     def get_for_org(cls, organization):

@@ -32,6 +32,16 @@ class Contact(TenantOwned):
     external_id = models.CharField(max_length=200, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        constraints = [
+            # A contact's external id is unique within (org, channel).
+            models.UniqueConstraint(
+                fields=['organization', 'channel', 'external_id'],
+                condition=~models.Q(external_id=''),
+                name='uniq_contact_org_channel_external',
+            ),
+        ]
+
     def __str__(self):
         return self.name
 

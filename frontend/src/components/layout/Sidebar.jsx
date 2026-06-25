@@ -32,7 +32,6 @@ const NAV_GROUPS = [
   },
 ]
 
-const INK   = '#0B1728'
 const GOLD  = '#C09B3A'
 const IVORY = '#FBF7EE'
 

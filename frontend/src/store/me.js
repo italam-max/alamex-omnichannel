@@ -19,23 +19,25 @@ const ALL_PERMS = {
 const MINIMAL_PERMS = { attend_convs: true }
 
 export const useMe = create((set, get) => ({
-  me:          null,
-  loaded:      false,
-  role:        null,
-  permissions: MINIMAL_PERMS,
+  me:           null,
+  loaded:       false,
+  role:         null,
+  organization: null,   // { slug, name } — the tenant the user belongs to
+  permissions:  MINIMAL_PERMS,
 
   loadMe: async () => {
     try {
       const me = await getMe()
       set({
         me,
-        loaded:      true,
-        role:        me.role ?? 'agent',
-        permissions: me.is_superuser ? ALL_PERMS : (me.permissions ?? MINIMAL_PERMS),
+        loaded:       true,
+        role:         me.role ?? 'agent',
+        organization: me.organization ?? null,
+        permissions:  me.is_superuser ? ALL_PERMS : (me.permissions ?? MINIMAL_PERMS),
       })
     } catch {
       // Offline / server error → fail closed to the minimal capability set.
-      set({ loaded: true, role: 'agent', permissions: MINIMAL_PERMS })
+      set({ loaded: true, role: 'agent', organization: null, permissions: MINIMAL_PERMS })
     }
   },
 

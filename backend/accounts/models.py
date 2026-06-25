@@ -100,6 +100,9 @@ class Workspace(TenantOwned):
 
     class Meta:
         verbose_name = 'Workspace (reglas de negocio)'
+        constraints = [
+            models.UniqueConstraint(fields=['organization'], name='uniq_workspace_org'),
+        ]
 
     def __str__(self):
         return f'Workspace: {self.company_name}'

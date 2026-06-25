@@ -54,11 +54,11 @@ class TenantManager(models.Manager):
 class TenantOwned(models.Model):
     """Abstract base: an organization-scoped row.
 
-    `organization` is nullable during the additive rollout (M1 add → M2 backfill
-    → M3 flip to NOT NULL). Do not rely on null in app code after M2."""
+    `organization` is required (NOT NULL after M3); save() auto-stamps it from
+    the current org context when not set explicitly."""
     organization = models.ForeignKey(
         'accounts.Organization', on_delete=models.CASCADE, related_name='+',
-        null=True, blank=True, db_index=True,
+        db_index=True,
     )
 
     # `objects` first → stays the default manager (unscoped). `tenant` opt-in.
