@@ -61,8 +61,9 @@ export default function Sidebar() {
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
-        background: INK,
+        background: 'linear-gradient(180deg, #0C1A2E 0%, #0B1728 55%, #091320 100%)',
         borderRight: '1px solid rgba(192,155,58,0.18)',
+        boxShadow: 'inset -1px 0 0 rgba(0,0,0,0.2)',
         transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1), min-width 0.22s cubic-bezier(0.4,0,0.2,1)',
         overflow: 'hidden',
         position: 'relative',
@@ -93,7 +94,7 @@ export default function Sidebar() {
           transition: 'max-width 0.22s cubic-bezier(0.4,0,0.2,1), opacity 0.15s',
           whiteSpace: 'nowrap',
         }}>
-          <p style={{ color: IVORY, fontWeight: 700, fontSize: '15px', lineHeight: 1, letterSpacing: '3px', textTransform: 'uppercase', margin: 0, fontFamily: "Georgia, 'Palatino Linotype', serif" }}>
+          <p style={{ color: IVORY, fontWeight: 700, fontSize: '15px', lineHeight: 1, letterSpacing: '3px', textTransform: 'uppercase', margin: 0, fontFamily: 'var(--font-display)' }}>
             Almenara
           </p>
           <p style={{ color: GOLD, fontSize: '8.5px', letterSpacing: '2.5px', textTransform: 'uppercase', margin: '4px 0 0' }}>

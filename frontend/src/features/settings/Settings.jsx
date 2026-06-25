@@ -44,7 +44,7 @@ function BalanceCard({ balance, isLow, threshold }) {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div>
           <p style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-muted)', marginBottom: '6px' }}>Saldo disponible</p>
-          <p style={{ fontSize: '36px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color, margin: 0, fontFamily: "Georgia, serif" }}>
+          <p style={{ fontSize: '36px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color, margin: 0, fontFamily: 'var(--font-display)' }}>
             ${fmt(balance)}
             <span style={{ fontSize: '14px', fontWeight: 400, color: 'var(--text-muted)', marginLeft: '6px' }}>USD</span>
           </p>
@@ -80,7 +80,7 @@ function SectionHeader({ icon: Icon, label, sub }) {
       <div>
         <h2 style={{
           margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text)',
-          fontFamily: "Georgia, 'Palatino Linotype', serif",
+          fontFamily: 'var(--font-display)',
         }}>{label}</h2>
         {sub && <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--text-muted)' }}>{sub}</p>}
       </div>

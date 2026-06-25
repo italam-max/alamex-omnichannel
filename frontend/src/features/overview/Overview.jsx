@@ -32,7 +32,7 @@ function KpiCard({ icon: Icon, label, value, sub, accent = 'gold' }) {
     }}>
       <div>
         <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 6px', letterSpacing: '0.1px' }}>{label}</p>
-        <p style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text)', margin: 0, fontVariantNumeric: 'tabular-nums', fontFamily: "Georgia, serif", letterSpacing: '-0.5px' }}>{value}</p>
+        <p style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text)', margin: 0, fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-display)', letterSpacing: '-0.5px' }}>{value}</p>
         {sub && <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0' }}>{sub}</p>}
       </div>
       <div style={{

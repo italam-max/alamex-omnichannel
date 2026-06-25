@@ -103,7 +103,7 @@ function SectionHeader({ id, icon: Icon, label, sub }) {
       <div>
         <h2 style={{
           fontSize: '14px', fontWeight: 700, color: 'var(--text)', margin: 0,
-          fontFamily: "Georgia, 'Palatino Linotype', serif",
+          fontFamily: 'var(--font-display)',
         }}>
           {label}
         </h2>

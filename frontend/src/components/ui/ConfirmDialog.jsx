@@ -57,7 +57,7 @@ export default function ConfirmDialog() {
           </div>
           <div style={{ minWidth: 0 }}>
             <h2 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--text)',
-              fontFamily: "Georgia, 'Palatino Linotype', serif" }}>
+              fontFamily: 'var(--font-display)' }}>
               {title}
             </h2>
             {message && (

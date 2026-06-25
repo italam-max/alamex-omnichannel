@@ -320,7 +320,7 @@ function EmptyState() {
 
       <p style={{
         fontSize: '16px', fontWeight: 700, color: 'var(--text)',
-        fontFamily: "Georgia, 'Palatino Linotype', serif",
+        fontFamily: 'var(--font-display)',
         marginBottom: '6px', letterSpacing: '-0.3px',
       }}>
         Selecciona una conversación
@@ -427,7 +427,7 @@ function ConfirmDialog({ title, message, confirmLabel, danger, onConfirm, onCanc
             <AlertTriangle size={16} style={{ color: danger ? 'var(--crimson)' : 'var(--gold)' }} />
           </div>
           <div>
-            <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text)', fontFamily: "Georgia, serif" }}>{title}</p>
+            <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text)', fontFamily: 'var(--font-display)' }}>{title}</p>
             <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>{message}</p>
           </div>
         </div>
@@ -656,7 +656,7 @@ export default function Inbox() {
             <div>
               <h2 style={{
                 margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--text)',
-                fontFamily: "Georgia, 'Palatino Linotype', serif",
+                fontFamily: 'var(--font-display)',
                 letterSpacing: '-0.2px',
               }}>
                 Conversaciones
@@ -782,7 +782,7 @@ export default function Inbox() {
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{
                 margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text)',
-                fontFamily: "Georgia, 'Palatino Linotype', serif",
+                fontFamily: 'var(--font-display)',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
                 {selName || '—'}

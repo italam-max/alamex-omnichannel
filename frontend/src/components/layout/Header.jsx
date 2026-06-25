@@ -56,7 +56,7 @@ function NotificationPanel({ onClose }) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Bell size={14} style={{ color: 'var(--gold)' }} />
-          <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text)', fontFamily: "Georgia, serif" }}>
+          <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text)', fontFamily: 'var(--font-display)' }}>
             Notificaciones
           </span>
           {unread > 0 && (
@@ -191,24 +191,24 @@ export default function Header({ title, subtitle }) {
 
   return (
     <header style={{
-      height: '56px',
+      height: '64px',
       background: 'var(--surface)',
       borderBottom: '1px solid var(--border)',
       boxShadow: 'inset 0 -1px 0 rgba(192,155,58,0.14)',
       display: 'flex', alignItems: 'center',
-      padding: '0 24px', gap: '16px',
+      padding: '0 28px', gap: '16px',
       position: 'sticky', top: 0, zIndex: 10,
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <h1 style={{
-          margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--text)',
-          fontFamily: "Georgia, 'Palatino Linotype', 'Book Antiqua', serif",
-          lineHeight: 1.2, letterSpacing: '-0.2px',
+          margin: 0, fontSize: '19px', fontWeight: 500, color: 'var(--text)',
+          fontFamily: 'var(--font-display)', fontOpticalSizing: 'auto',
+          lineHeight: 1.15, letterSpacing: '-0.015em',
         }}>
           {title}
         </h1>
         {subtitle && (
-          <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.1px' }}>
+          <p style={{ margin: '3px 0 0', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.02em' }}>
             {subtitle}
           </p>
         )}

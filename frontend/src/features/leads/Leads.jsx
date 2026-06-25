@@ -277,7 +277,7 @@ function ReassignModal({ conv, agents, onAssign, onClose }) {
               </div>
               <h3 style={{
                 margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text)',
-                fontFamily: "Georgia, serif",
+                fontFamily: 'var(--font-display)',
               }}>
                 Reasignar conversación
               </h3>
@@ -686,7 +686,7 @@ function EmptyTab({ icon: Icon, title, sub }) {
       }}>
         <Icon size={20} style={{ color: 'var(--gold)' }} />
       </div>
-      <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: 'var(--text)', fontFamily: "Georgia, serif" }}>{title}</p>
+      <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: 'var(--text)', fontFamily: 'var(--font-display)' }}>{title}</p>
       <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center', maxWidth: '220px', lineHeight: 1.5 }}>{sub}</p>
     </div>
   )

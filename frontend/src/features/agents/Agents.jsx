@@ -232,7 +232,7 @@ function AgentModal({ agent, channels, onSave, onClose }) {
         boxShadow: '0 20px 60px rgba(11,23,40,0.22)',
       }}>
         <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 1 }}>
-          <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--text)', fontFamily: "Georgia, serif" }}>
+          <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--text)', fontFamily: 'var(--font-display)' }}>
             {editing ? `Editar ${agent.name}` : 'Nuevo agente'}
           </h3>
           <button onClick={onClose} style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
@@ -404,7 +404,7 @@ export default function Agents() {
             { label: 'Dados de baja', value: inactive.length, color: 'var(--text-muted)' },
           ].map(s => (
             <div key={s.label}>
-              <p style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: s.color, fontVariantNumeric: 'tabular-nums', fontFamily: "Georgia, serif" }}>{s.value}</p>
+              <p style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: s.color, fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-display)' }}>{s.value}</p>
               <p style={{ margin: '2px 0 0', fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{s.label}</p>
             </div>
           ))}
@@ -497,7 +497,7 @@ export default function Agents() {
             <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--crimson-pale)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '14px' }}>
               <UserX size={18} style={{ color: 'var(--crimson)' }} />
             </div>
-            <h3 style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: 700, color: 'var(--text)', fontFamily: "Georgia, serif" }}>
+            <h3 style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: 700, color: 'var(--text)', fontFamily: 'var(--font-display)' }}>
               Dar de baja a {confirm.agent.name}
             </h3>
             <p style={{ margin: '0 0 18px', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>

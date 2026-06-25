@@ -137,7 +137,7 @@ function PrivateLayout() {
   useEffect(() => { loadMe() }, [loadMe])
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100%', overflow: 'hidden', background: 'var(--sand)' }}>
+    <div style={{ display: 'flex', height: '100vh', width: '100%', overflow: 'hidden', background: 'var(--canvas)' }}>
       <ConfirmDialog />
       <ErrorCenter />
       <Sidebar />

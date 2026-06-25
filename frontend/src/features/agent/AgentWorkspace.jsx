@@ -375,7 +375,7 @@ export default function AgentWorkspace() {
               <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: 'var(--gold-vp)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <MessageSquare size={22} style={{ color: 'var(--gold)' }} />
               </div>
-              <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text)', fontFamily: "Georgia, serif" }}>Selecciona una conversación</p>
+              <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text)', fontFamily: 'var(--font-display)' }}>Selecciona una conversación</p>
               <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', maxWidth: '260px' }}>
                 Toma una de la cola "Disponibles" o abre una de tus conversaciones asignadas.
               </p>

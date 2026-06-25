@@ -27,22 +27,51 @@
   --jade-pale:    #E4F0EA;
   --crimson:      #7A1C2A;
   --crimson-pale: #F5E6E8;
-  --sand:         #F3EDE0;
-  --sand-2:       #E8E0CE;
-  --border:       #DDD3BC;
-  --text:         #0B1728;
-  --text-mid:     #3D2E1A;
-  --text-muted:   #6B5E46;
-  --surface:      #FFFEF9;
+  --sand:         #EFE8DA;
+  --sand-2:       #E6DECC;
+  --border:       #E0D7C5;
+  --border-strong:#D2C7AF;
+  --text:         #15212E;
+  --text-mid:     #4A4034;
+  --text-muted:   #7A6E59;
+  --surface:      #FFFEFA;
+
+  /* Working canvas — a calm warm paper, lighter than --sand, so cards float. */
+  --canvas:       #F6F2EA;
+  --canvas-deep:  #EFE9DC;
+
+  /* Type system */
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-sans:    'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    ui-monospace, 'SF Mono', 'Geist Mono', Menlo, monospace;
+
+  /* Layered elevation — soft, ink-tinted depth */
+  --shadow-sm: 0 1px 2px rgba(11,23,40,0.04), 0 1px 1px rgba(11,23,40,0.03);
+  --shadow-md: 0 2px 4px rgba(11,23,40,0.04), 0 6px 16px rgba(11,23,40,0.06);
+  --shadow-lg: 0 4px 8px rgba(11,23,40,0.05), 0 18px 44px rgba(11,23,40,0.12);
+
+  /* Signature device — the gold "beam" hairline */
+  --beam: linear-gradient(90deg, transparent, var(--gold) 45%, var(--gold-light) 55%, transparent);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  background: var(--sand);
+  font-family: var(--font-sans);
+  font-feature-settings: 'ss01', 'cv01';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--canvas);
   color: var(--text);
+  letter-spacing: -0.006em;
+}
+
+/* Display face (Fraunces). Applied via .display and the explicit serif spots. */
+.display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.01em;
 }
 
 #root {
@@ -109,8 +138,8 @@ body {
 .card-warm {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(11, 23, 40, 0.04);
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
 }
 
 /* Gold primary button */
@@ -118,19 +147,22 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
+  padding: 9px 17px;
   background: var(--gold);
   color: var(--ink);
   font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.01em;
   border: none;
-  border-radius: 8px;
+  border-radius: 9px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
   text-decoration: none;
+  box-shadow: 0 1px 2px rgba(11,23,40,0.12), inset 0 1px 0 rgba(255,255,255,0.18);
 }
 
-.btn-gold:hover { background: var(--gold-light); }
+.btn-gold:hover { background: var(--gold-light); box-shadow: 0 3px 12px rgba(192,155,58,0.32), inset 0 1px 0 rgba(255,255,255,0.22); }
+.btn-gold:active { transform: translateY(0.5px); }
 .btn-gold:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Muted button */
@@ -392,8 +424,8 @@ input:focus, textarea:focus, select:focus {
 .kb-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(11, 23, 40, 0.04);
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
 }
 .kb-label {
   display: block;
