@@ -1,6 +1,6 @@
 import { mockKpis } from '../../mocks/kpis'
 import PageShell from '../../components/layout/PageShell'
-import { MessageSquare, Users, Bot, Clock, TrendingUp, Zap } from 'lucide-react'
+import { MessageSquare, Bot, Clock, TrendingUp, Zap } from 'lucide-react'
 
 const STAGE_COLORS = {
   new:       'var(--text-muted)',

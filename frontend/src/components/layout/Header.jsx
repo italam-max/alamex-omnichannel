@@ -78,7 +78,7 @@ function NotificationPanel({ onClose }) {
               Marcar todas
             </button>
           )}
-          <button onClick={onClose} style={{
+          <button onClick={onClose} aria-label="Cerrar notificaciones" style={{
             width: '22px', height: '22px', borderRadius: '6px',
             background: 'none', border: 'none', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -194,6 +194,7 @@ export default function Header({ title, subtitle }) {
       height: '56px',
       background: 'var(--surface)',
       borderBottom: '1px solid var(--border)',
+      boxShadow: 'inset 0 -1px 0 rgba(192,155,58,0.14)',
       display: 'flex', alignItems: 'center',
       padding: '0 24px', gap: '16px',
       position: 'sticky', top: 0, zIndex: 10,
@@ -215,7 +216,7 @@ export default function Header({ title, subtitle }) {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
         {/* Search */}
-        <button style={{
+        <button aria-label="Buscar" style={{
           width: '32px', height: '32px',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           borderRadius: '8px', border: 'none', background: 'transparent',
@@ -231,6 +232,8 @@ export default function Header({ title, subtitle }) {
         <div style={{ position: 'relative' }}>
           <button
             onClick={() => setBellOpen(o => !o)}
+            aria-label={unread > 0 ? `Notificaciones, ${unread} sin leer` : 'Notificaciones'}
+            aria-expanded={bellOpen}
             style={{
               width: '32px', height: '32px',
               display: 'flex', alignItems: 'center', justifyContent: 'center',

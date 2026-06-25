@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+/* Beacon glow — the lamp breathes, like a real almenara signaling. */
+@keyframes beaconPulse {
+  0%, 100% { opacity: 0.16; transform: scale(1); }
+  50%      { opacity: 0.40; transform: scale(1.18); }
+}
+.beacon-glow { transform-origin: center; animation: beaconPulse 3.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .beacon-glow { animation: none; } }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* Keyboard focus — a refined gold ring for accessible navigation. */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
 :root {
   --ink:          #0B1728;
   --ink-mid:      #1E3A5C;
@@ -337,6 +353,21 @@ input:focus, textarea:focus, select:focus {
   to   { opacity: 1; transform: translateY(0)    scale(1);    }
 }
 
+/* SLA escalation pulse — applied to escalated conversation cards */
+@keyframes pulse-sla {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(122,28,42,0.35), 0 2px 12px rgba(122,28,42,0.07); }
+  50%       { box-shadow: 0 0 0 4px rgba(122,28,42,0.12), 0 4px 20px rgba(122,28,42,0.18); }
+}
+.sla-escalated {
+  animation: pulse-sla 2.2s ease-in-out infinite;
+}
+
+/* Spin utility */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 /* Filter pill buttons */
 .filter-pill {
   padding: 5px 12px;
@@ -355,4 +386,74 @@ input:focus, textarea:focus, select:focus {
   color: var(--gold);
   border-color: var(--ink);
   font-weight: 600;
+}
+
+/* ── Knowledge page form controls (premium palette) ─────────────── */
+.kb-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(11, 23, 40, 0.04);
+}
+.kb-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-mid);
+  margin-bottom: 5px;
+}
+.kb-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 5px 0 0;
+  line-height: 1.45;
+}
+.kb-input, .kb-textarea, .kb-select {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  font-family: inherit;
+}
+.kb-textarea { resize: vertical; line-height: 1.5; }
+.kb-input::placeholder, .kb-textarea::placeholder { color: var(--text-muted); opacity: 0.7; }
+.kb-input:focus, .kb-textarea:focus, .kb-select:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-pale);
+}
+.kb-mono { font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+.kb-check { width: 15px; height: 15px; accent-color: var(--gold); cursor: pointer; }
+
+/* Section heading icon tile */
+.kb-icon-tile {
+  width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
+  background: var(--gold-pale);
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* Prompt-assembly stepper (orchestration explainer) */
+.kb-step {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 9px 12px; border-radius: 9px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.kb-step-num {
+  width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
+  background: var(--gold); color: var(--ink);
+  font-size: 10px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 1px;
+}
+.kb-tag {
+  display: inline-block;
+  background: var(--sand-2); color: var(--text-mid);
+  font-size: 10px; font-weight: 600;
+  padding: 1px 6px; border-radius: 4px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
 }

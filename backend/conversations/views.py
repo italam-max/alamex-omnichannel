@@ -76,9 +76,33 @@ class ContactViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Conversation.objects.select_related('channel', 'contact').prefetch_related('messages').all()
+    queryset = (Conversation.objects
+                .select_related('channel', 'contact', 'assigned_to')
+                .prefetch_related('messages')
+                .order_by('-updated_at'))
     serializer_class = ConversationSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        params = self.request.query_params
+        profile = getattr(self.request.user, 'agent_profile', None)
+
+        # Agent workspace: only conversations assigned to the current agent.
+        if params.get('assigned') == 'me':
+            qs = qs.filter(assigned_to=profile) if profile else qs.none()
+
+        # Claimable queue: unassigned human-takeover convs on the agent's channels.
+        elif params.get('queue') == 'true':
+            qs = qs.filter(status='human_takeover', assigned_to__isnull=True)
+            if profile:
+                channel_ids = list(profile.channels.values_list('id', flat=True))
+                if channel_ids:
+                    qs = qs.filter(channel_id__in=channel_ids)
+
+        if params.get('status'):
+            qs = qs.filter(status=params['status'])
+        return qs
 
     @action(detail=True, methods=['patch'], url_path='update')
     def partial_update_conversation(self, request, pk=None):
@@ -91,9 +115,41 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         conversation.save(update_fields=list(data.keys()))
         return Response(ConversationSerializer(conversation).data)
 
+    @action(detail=True, methods=['post'], url_path='claim')
+    def claim(self, request, pk=None):
+        """An agent takes ownership of an unassigned conversation."""
+        from django.utils import timezone
+        from accounts.models import SLAAlert
+        conversation = self.get_object()
+        profile = getattr(request.user, 'agent_profile', None)
+        if not profile:
+            return Response({'detail': 'Solo un agente puede tomar conversaciones.'},
+                            status=status.HTTP_403_FORBIDDEN)
+        conversation.assigned_to = profile
+        conversation.assigned_at = timezone.now()
+        conversation.status = 'human_takeover'
+        conversation.ai_active = False
+        conversation.save(update_fields=['assigned_to', 'assigned_at', 'status', 'ai_active', 'updated_at'])
+        SLAAlert.objects.filter(conversation=conversation, resolved=False).update(
+            resolved=True, acknowledged=True, acknowledged_by=profile)
+        return Response(ConversationSerializer(conversation).data)
+
+    @action(detail=True, methods=['post'], url_path='release')
+    def release(self, request, pk=None):
+        """Agent finishes — hand the conversation back to the AI."""
+        from accounts.models import SLAAlert
+        conversation = self.get_object()
+        conversation.assigned_to = None
+        conversation.assigned_at = None
+        conversation.status = 'active'
+        conversation.ai_active = True
+        conversation.save(update_fields=['assigned_to', 'assigned_at', 'status', 'ai_active', 'updated_at'])
+        SLAAlert.objects.filter(conversation=conversation, resolved=False).update(resolved=True)
+        return Response(ConversationSerializer(conversation).data)
+
     @action(detail=True, methods=['post'], url_path='messages')
     def create_message(self, request, pk=None):
-        """Send an agent message from the Inbox."""
+        """Send an agent message from the Inbox. Marks first response for SLA."""
         conversation = self.get_object()
         content = (request.data.get('content') or '').strip()
         if not content:
@@ -103,6 +159,9 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
             role='agent',
             content=content,
         )
+        # Replying clears any open SLA alert — the customer is no longer waiting.
+        from accounts.models import SLAAlert
+        SLAAlert.objects.filter(conversation=conversation, resolved=False).update(resolved=True)
         return Response(MessageSerializer(msg).data, status=status.HTTP_201_CREATED)
 
 

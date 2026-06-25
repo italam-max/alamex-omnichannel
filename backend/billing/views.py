@@ -2,16 +2,16 @@ from decimal import Decimal, InvalidOperation
 from django.conf import settings
 from django.db import transaction as db_transaction
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
+from accounts.permissions import IsAdminStrict
 from .models import CreditAccount, CreditTransaction
 from .serializers import CreditAccountSerializer, CreditTransactionSerializer
 
 
 @api_view(['GET', 'PATCH'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminStrict])
 def account_view(request):
     """GET: full account state. PATCH: update markup/alert_threshold."""
     account = CreditAccount.get_solo()
@@ -34,7 +34,7 @@ def account_view(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminStrict])
 def topup_view(request):
     """Add credits to the account."""
     try:
@@ -62,7 +62,7 @@ def topup_view(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminStrict])
 def transactions_view(request):
     """Last 50 transactions."""
     qs = CreditTransaction.objects.all()[:50]
@@ -70,7 +70,7 @@ def transactions_view(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminStrict])
 def usage_stats_view(request):
     """Aggregate usage for the last 30 days (by model)."""
     from django.utils import timezone

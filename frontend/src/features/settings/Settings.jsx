@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import PageShell from '../../components/layout/PageShell'
 import {
-  Key, Zap, TrendingDown, Plus, CheckCircle, XCircle,
+  Key, CheckCircle, XCircle,
   Loader, Save, AlertTriangle, ArrowUpCircle, Clock,
-  CreditCard, Settings2
+  CreditCard, SlidersHorizontal
 } from 'lucide-react'
 import { getAccount, updateAccount, topup, getTransactions, getUsageStats } from '../../services/billing'
+import BusinessRules from './BusinessRules'
 
 // ── Model labels ──────────────────────────────────────────────────
 
@@ -178,8 +179,14 @@ export default function Settings() {
   const keyConfigured = account?.anthropic_key_configured
 
   return (
-    <PageShell title="Ajustes" subtitle="Proveedor de IA · Créditos · Historial">
+    <PageShell title="Ajustes" subtitle="Reglas de negocio · Proveedor de IA · Créditos">
       <div className="max-w-3xl space-y-8">
+
+        {/* ── REGLAS DE NEGOCIO (SLA / alertas / anti-spam) ────── */}
+        <section>
+          <SectionHeader icon={SlidersHorizontal} label="Reglas de negocio" sub="SLA, escalada por correo y filtro anti-spam — sin tocar código" />
+          <BusinessRules />
+        </section>
 
         {/* ── PROVEEDOR DE IA ──────────────────────────────────── */}
         <section>

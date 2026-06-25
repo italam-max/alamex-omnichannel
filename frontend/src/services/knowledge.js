@@ -39,3 +39,29 @@ export async function scrapeWebsite(payload) {
   const { data } = await api.post('/knowledge/scrape/', payload)
   return data
 }
+
+// ── Custom tools ──────────────────────────────────────────────────
+
+export async function listTools() {
+  const { data } = await api.get('/knowledge/tools/')
+  return data.results ?? data
+}
+
+export async function createTool(payload) {
+  const { data } = await api.post('/knowledge/tools/', payload)
+  return data
+}
+
+export async function updateTool(id, payload) {
+  const { data } = await api.patch(`/knowledge/tools/${id}/`, payload)
+  return data
+}
+
+export async function deleteTool(id) {
+  await api.delete(`/knowledge/tools/${id}/`)
+}
+
+export async function approveTool(id) {
+  const { data } = await api.post(`/knowledge/tools/${id}/approve/`)
+  return data
+}

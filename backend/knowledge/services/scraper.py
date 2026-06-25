@@ -29,9 +29,19 @@ MAX_TEXT_PER_PAGE = 4000
 # ── Fetching ──────────────────────────────────────────────────────
 
 def _fetch(url: str) -> str | None:
+    # SSRF guard: reject internal/non-public targets before fetching, and
+    # again after any redirects (a public host can 30x to an internal IP).
+    from integrations.services.net_safety import url_safety_error
+    reason = url_safety_error(url, require_https=False)
+    if reason:
+        logger.warning('[Scraper] Blocked unsafe URL %s: %s', url, reason)
+        return None
     try:
         resp = requests.get(url, headers=HEADERS, timeout=TIMEOUT, allow_redirects=True)
         resp.raise_for_status()
+        if resp.url != url and url_safety_error(resp.url, require_https=False):
+            logger.warning('[Scraper] Blocked redirect to unsafe URL %s', resp.url)
+            return None
         ct = resp.headers.get('content-type', '')
         if 'text/html' not in ct:
             return None

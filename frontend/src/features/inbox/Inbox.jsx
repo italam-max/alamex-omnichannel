@@ -4,8 +4,8 @@ import { getConversations, getConversation, sendAgentMessage, toggleAiActive } f
 import api from '../../services/api'
 import {
   Bot, User, Search, Send, Loader, RefreshCw,
-  Phone, MoreVertical, Sparkles, ChevronDown,
-  CheckCircle, Ban, UserX, Download, AlertTriangle, X,
+  Phone, MoreVertical, Sparkles,
+  CheckCircle, Ban, UserX, Download, AlertTriangle,
 } from 'lucide-react'
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'

@@ -4,101 +4,61 @@ import {
   Globe, Plus, Trash2, FileText, Save, Loader,
   ChevronUp, ChevronDown, CheckCircle, XCircle, X,
   Bot, BookOpen, Languages, Sparkles, Link,
-  Eye, EyeOff, AlertCircle, Cpu, Zap
+  Eye, EyeOff, AlertCircle, Cpu, Zap, Wrench,
 } from 'lucide-react'
 import {
   getAIConfig, saveAIConfig,
   listDocs, createDoc, updateDoc, deleteDoc,
   scrapeWebsite,
 } from '../../services/knowledge'
+import CustomTools from './CustomTools'
+import { confirm } from '../../store/confirm'
+import { reportError } from '../../store/errors'
 
-// ── Agent architecture diagram ─────────────────────────────────────
+// ── Orchestration explainer ────────────────────────────────────────
+// Shows how every field on this page is assembled, in order, into the
+// single system prompt the agent reads before each conversation.
 
-function AgentFlowCard() {
+const ASSEMBLY = [
+  { n: 1, label: 'Persona',  tag: 'inicio del prompt', from: 'Nombre · Empresa · Género · Tono · Identidad',
+    desc: 'Quién es el agente y cómo habla.' },
+  { n: 2, label: 'Contexto del negocio', tag: 'CONTEXTO DEL NEGOCIO', from: 'Resumen',
+    desc: 'Lo que el agente siempre sabe de la empresa.' },
+  { n: 3, label: 'Reglas', tag: 'REGLAS DE COMPORTAMIENTO', from: 'Reglas (en orden)',
+    desc: 'Instrucciones y disparadores de acciones.' },
+  { n: 4, label: 'Idioma', tag: 'final del prompt', from: 'Política de idioma',
+    desc: 'En qué idioma responde.' },
+  { n: 5, label: 'Herramientas', tag: 'HERRAMIENTAS', from: 'Fijas',
+    desc: 'search_knowledge_base, create_lead, create_followup, handoff_to_human.' },
+]
+
+function OrchestrationCard() {
   return (
-    <div style={{
-      background: 'var(--surface)',
-      border: '1px solid var(--border)',
-      borderRadius: '14px',
-      padding: '18px 20px',
-      marginBottom: '28px',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+    <div className="kb-card" style={{ padding: '18px 20px', marginBottom: '28px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
         <Cpu size={14} style={{ color: 'var(--gold)' }} />
         <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-          Cómo usa el agente esta configuración
+          Cómo se orquesta el agente
         </span>
       </div>
+      <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 16px', lineHeight: 1.5 }}>
+        Todo lo que configuras aquí se ensambla, <strong style={{ color: 'var(--text-mid)' }}>en este orden</strong>, en
+        un único <em>prompt del sistema</em> que Claude recibe antes de cada conversación. Los
+        <strong style={{ color: 'var(--text-mid)' }}> Documentos</strong> son la excepción: no van en el prompt, el
+        agente los consulta en tiempo real con <code className="kb-tag">search_knowledge_base</code>.
+      </p>
 
-      {/* Flow diagram */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-        {/* Left block: config params */}
-        <div style={{
-          background: 'var(--gold-vp)',
-          border: '1px solid rgba(192,155,58,0.35)',
-          borderRadius: '10px',
-          padding: '10px 14px',
-          minWidth: '140px',
-        }}>
-          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 6px' }}>
-            Esta página
-          </p>
-          {[
-            ['Persona',  'identity_line'],
-            ['Resumen',  'contexto del negocio'],
-            ['Reglas',   'instrucciones'],
-            ['Idioma',   'política'],
-          ].map(([label, sub]) => (
-            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '3px' }}>
-              <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'var(--gold)', flexShrink: 0, opacity: 0.7 }} />
-              <span style={{ fontSize: '11px', color: 'var(--text-mid)', fontWeight: 500 }}>{label}</span>
-              <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>→ {sub}</span>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '8px' }}>
+        {ASSEMBLY.map(s => (
+          <div key={s.n} className="kb-step">
+            <span className="kb-step-num">{s.n}</span>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text)', margin: 0 }}>{s.label}</p>
+              <p style={{ fontSize: '10.5px', color: 'var(--text-muted)', margin: '2px 0 5px', lineHeight: 1.4 }}>{s.desc}</p>
+              <span className="kb-tag">{s.from}</span>
             </div>
-          ))}
-        </div>
-
-        <div style={{ color: 'var(--gold)', fontSize: '20px', flexShrink: 0 }}>→</div>
-
-        {/* Center: system prompt + Claude */}
-        <div style={{
-          background: 'var(--ink)',
-          borderRadius: '10px',
-          padding: '10px 14px',
-          minWidth: '150px',
-          textAlign: 'center',
-        }}>
-          <p style={{ fontSize: '10px', color: 'rgba(251,247,238,0.45)', margin: '0 0 2px', letterSpacing: '1px', textTransform: 'uppercase' }}>
-            Prompt del sistema
-          </p>
-          <p style={{ fontSize: '13px', fontWeight: 700, color: '#FBF7EE', margin: '0 0 4px' }}>
-            Agente IA
-          </p>
-          <p style={{ fontSize: '10px', color: 'rgba(192,155,58,0.8)', margin: 0 }}>
-            Razona · Decide · Actúa
-          </p>
-        </div>
-
-        <div style={{ color: 'var(--gold)', fontSize: '20px', flexShrink: 0 }}>←</div>
-
-        {/* Right: knowledge base */}
-        <div style={{
-          background: 'var(--jade-pale)',
-          border: '1px solid rgba(26,92,58,0.25)',
-          borderRadius: '10px',
-          padding: '10px 14px',
-          minWidth: '140px',
-        }}>
-          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--jade)', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 6px' }}>
-            Base de conocimiento
-          </p>
-          <div style={{ fontSize: '11px', color: 'var(--text-mid)', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <Zap size={10} style={{ color: 'var(--jade)', flexShrink: 0 }} />
-            <span>search_knowledge_base</span>
           </div>
-          <p style={{ fontSize: '10px', color: 'var(--text-muted)', margin: '0 0 0 15px' }}>
-            El agente consulta los documentos cuando necesita responder preguntas específicas
-          </p>
-        </div>
+        ))}
       </div>
     </div>
   )
@@ -115,16 +75,7 @@ function AgentNote({ children }) {
   )
 }
 
-// ── Section anchor nav ─────────────────────────────────────────────
-
-const SECTIONS = [
-  { id: 'scraper',   label: 'Extractor web',       icon: Globe },
-  { id: 'overview',  label: 'Resumen del negocio',  icon: BookOpen },
-  { id: 'docs',      label: 'Documentos',           icon: FileText },
-  { id: 'persona',   label: 'Persona',              icon: Bot },
-  { id: 'rules',     label: 'Reglas',               icon: Sparkles },
-  { id: 'language',  label: 'Idioma',               icon: Languages },
-]
+// ── Section anchor nav (matches prompt assembly order) ─────────────
 
 const TONE_PRESETS = [
   { value: '', label: 'Sin definir' },
@@ -145,17 +96,13 @@ const GENDER_OPTIONS = [
 
 function SectionHeader({ id, icon: Icon, label, sub }) {
   return (
-    <div id={id} className="flex items-center gap-3 mb-4">
-      <div style={{
-        width: '32px', height: '32px', borderRadius: '8px',
-        background: 'var(--gold-pale)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-      }}>
+    <div id={id} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', scrollMarginTop: '16px' }}>
+      <div className="kb-icon-tile">
         <Icon size={15} style={{ color: 'var(--gold)' }} />
       </div>
       <div>
         <h2 style={{
-          fontSize: '13px', fontWeight: 700, color: 'var(--text)', margin: 0,
+          fontSize: '14px', fontWeight: 700, color: 'var(--text)', margin: 0,
           fontFamily: "Georgia, 'Palatino Linotype', serif",
         }}>
           {label}
@@ -166,7 +113,7 @@ function SectionHeader({ id, icon: Icon, label, sub }) {
   )
 }
 
-// ── Web Scraper section ───────────────────────────────────────────
+// ── Web Scraper (helper that fills Documents) ──────────────────────
 
 function ScraperSection({ onImport }) {
   const [url, setUrl]                 = useState('')
@@ -243,96 +190,80 @@ function ScraperSection({ onImport }) {
   }
 
   const selectedCount = Object.values(selected).filter(Boolean).length
+  const allSelected = result && selectedCount === result.documents.length
 
   return (
-    <div className="space-y-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
       {/* URL + options */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-4">
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">URL del sitio web</label>
-            <div className="flex gap-2">
-              <div className="flex-1 flex items-center border border-gray-200 rounded-lg overflow-hidden focus-within:border-amber-400">
-                <Link size={13} className="ml-3 text-gray-400 flex-shrink-0" />
-                <input
-                  value={url}
-                  onChange={e => setUrl(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleScrape()}
-                  placeholder="https://www.alam.mx"
-                  className="flex-1 px-2 py-2.5 text-sm focus:outline-none"
-                />
-              </div>
-              <button
-                onClick={handleScrape}
-                disabled={loading || !url.trim()}
-                className="btn-gold" style={{whiteSpace:"nowrap"}}
-              >
-                {loading ? <Loader size={13} className="animate-spin" /> : <Globe size={13} />}
-                {loading ? 'Analizando…' : 'Extraer información'}
-              </button>
-            </div>
+      <div className="kb-card" style={{ padding: '18px' }}>
+        <label className="kb-label">URL del sitio web</label>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{
+            flex: 1, display: 'flex', alignItems: 'center',
+            border: '1px solid var(--border)', borderRadius: '9px', overflow: 'hidden', background: 'var(--surface)',
+          }}>
+            <Link size={13} style={{ marginLeft: '12px', color: 'var(--text-muted)', flexShrink: 0 }} />
+            <input
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleScrape()}
+              placeholder="https://www.tu-empresa.com"
+              style={{ flex: 1, padding: '9px 10px', fontSize: '13px', border: 'none', outline: 'none', background: 'transparent', color: 'var(--text)' }}
+            />
           </div>
+          <button onClick={handleScrape} disabled={loading || !url.trim()} className="btn-gold" style={{ whiteSpace: 'nowrap' }}>
+            {loading ? <Loader size={13} className="animate-spin" /> : <Globe size={13} />}
+            {loading ? 'Analizando…' : 'Extraer información'}
+          </button>
+        </div>
 
-          {/* Options row */}
-          <div className="flex flex-wrap items-center gap-4 pt-1">
-            <label className="flex items-center gap-2 cursor-pointer">
+        {/* Options row */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '16px', marginTop: '14px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+            <input type="checkbox" checked={followLinks} onChange={e => setFollowLinks(e.target.checked)} className="kb-check" />
+            <span style={{ fontSize: '12px', color: 'var(--text-mid)' }}>Seguir enlaces internos</span>
+          </label>
+
+          {followLinks && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Máx. páginas:</span>
+              <select value={maxPages} onChange={e => setMaxPages(Number(e.target.value))} className="kb-select" style={{ width: 'auto', padding: '5px 8px', fontSize: '12px' }}>
+                {[3, 5, 8, 10, 15].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+            <Bot size={12} style={{ color: 'var(--gold)' }} />
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Analizar con IA</span>
+            <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden', background: 'var(--surface)' }}>
               <input
-                type="checkbox"
-                checked={followLinks}
-                onChange={e => setFollowLinks(e.target.checked)}
-                className="w-3.5 h-3.5 rounded accent-amber-600"
+                type={showKey ? 'text' : 'password'}
+                value={apiKey}
+                onChange={e => setApiKey(e.target.value)}
+                placeholder="sk-ant-api03-… (opcional)"
+                className="kb-mono"
+                style={{ fontSize: '12px', padding: '6px 8px', width: '176px', border: 'none', outline: 'none', background: 'transparent', color: 'var(--text)' }}
               />
-              <span className="text-xs text-gray-600">Seguir enlaces internos</span>
-            </label>
-
-            {followLinks && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">Máx. páginas:</span>
-                <select
-                  value={maxPages}
-                  onChange={e => setMaxPages(Number(e.target.value))}
-                  className="text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:border-amber-400"
-                >
-                  {[3, 5, 8, 10, 15].map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 ml-auto">
-              <Bot size={12} className="text-violet-400" />
-              <span className="text-xs text-gray-400">Analizar con IA</span>
-              <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
-                <input
-                  type={showKey ? 'text' : 'password'}
-                  value={apiKey}
-                  onChange={e => setApiKey(e.target.value)}
-                  placeholder="sk-ant-api03-… (opcional)"
-                  className="text-xs px-2 py-1.5 w-44 focus:outline-none font-mono"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKey(s => !s)}
-                  className="px-2 text-gray-400 hover:text-gray-600"
-                >
-                  {showKey ? <EyeOff size={11} /> : <Eye size={11} />}
-                </button>
-              </div>
+              <button type="button" onClick={() => setShowKey(s => !s)} style={{ padding: '0 8px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
+                {showKey ? <EyeOff size={11} /> : <Eye size={11} />}
+              </button>
             </div>
           </div>
         </div>
 
         {/* Loading step indicator */}
         {loading && step && (
-          <div className="flex items-center gap-2 px-3 py-2 bg-violet-50 rounded-lg">
-            <Loader size={12} className="animate-spin text-amber-600 flex-shrink-0" />
-            <span className="text-xs text-amber-700">{step}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'var(--gold-pale)', borderRadius: '8px', marginTop: '14px' }}>
+            <Loader size={12} className="animate-spin" style={{ color: 'var(--gold)', flexShrink: 0 }} />
+            <span style={{ fontSize: '12px', color: 'var(--text-mid)' }}>{step}</span>
           </div>
         )}
 
         {/* Error */}
         {error && (
-          <div className="flex items-start gap-2 px-3 py-2.5 bg-red-50 rounded-lg text-xs text-red-600">
-            <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '10px 12px', background: 'var(--crimson-pale)', borderRadius: '8px', marginTop: '14px', fontSize: '12px', color: 'var(--crimson)' }}>
+            <AlertCircle size={13} style={{ flexShrink: 0, marginTop: '1px' }} />
             {error}
           </div>
         )}
@@ -340,57 +271,47 @@ function ScraperSection({ onImport }) {
 
       {/* Results */}
       {result && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-          {/* Results header */}
-          <div className="px-5 py-3 border-b border-gray-50 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {result.ai_structured
-                ? <Sparkles size={13} className="text-violet-400" />
-                : <FileText size={13} className="text-gray-400" />}
-              <span className="text-xs font-medium text-gray-700">
+        <div className="kb-card" style={{ overflow: 'hidden' }}>
+          <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {result.ai_structured ? <Sparkles size={13} style={{ color: 'var(--gold)' }} /> : <FileText size={13} style={{ color: 'var(--text-muted)' }} />}
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-mid)' }}>
                 {result.documents.length} documentos encontrados
               </span>
-              <span className="text-[11px] text-gray-400">
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                 · {result.pages_scraped} página{result.pages_scraped !== 1 ? 's' : ''} analizadas
                 {result.ai_structured && ' · estructurado con IA'}
               </span>
             </div>
-            <div className="flex items-center gap-2">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <button
                 onClick={() => {
-                  const allSelected = selectedCount === result.documents.length
                   const s = {}
                   result.documents.forEach((_, i) => { s[i] = !allSelected })
                   setSelected(s)
                 }}
-                className="text-[11px] text-gray-400 hover:text-gray-600"
+                style={{ fontSize: '11px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
               >
-                {selectedCount === result.documents.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+                {allSelected ? 'Deseleccionar todos' : 'Seleccionar todos'}
               </button>
-              <button
-                onClick={handleImport}
-                disabled={selectedCount === 0}
-                className="btn-gold"
-              >
+              <button onClick={handleImport} disabled={selectedCount === 0} className="btn-gold">
                 <Plus size={11} />
                 Importar {selectedCount > 0 ? `${selectedCount} seleccionado${selectedCount !== 1 ? 's' : ''}` : ''}
               </button>
             </div>
           </div>
 
-          {/* Document previews */}
-          <div className="divide-y divide-gray-50">
+          <div>
             {result.documents.map((doc, i) => (
-              <div key={i} className={`flex gap-3 px-5 py-3.5 transition-colors ${selected[i] ? 'bg-violet-50/30' : 'bg-white'}`}>
-                <input
-                  type="checkbox"
-                  checked={!!selected[i]}
-                  onChange={e => setSelected(s => ({ ...s, [i]: e.target.checked }))}
-                  className="mt-0.5 w-3.5 h-3.5 rounded accent-amber-600 flex-shrink-0"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-gray-800">{doc.title}</p>
-                  <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{doc.content}</p>
+              <div key={i} style={{
+                display: 'flex', gap: '12px', padding: '14px 18px',
+                borderBottom: i < result.documents.length - 1 ? '1px solid var(--border)' : 'none',
+                background: selected[i] ? 'var(--gold-pale)' : 'transparent',
+              }}>
+                <input type="checkbox" checked={!!selected[i]} onChange={e => setSelected(s => ({ ...s, [i]: e.target.checked }))} className="kb-check" style={{ marginTop: '2px', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{doc.title}</p>
+                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '3px 0 0', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{doc.content}</p>
                 </div>
               </div>
             ))}
@@ -421,41 +342,40 @@ function DocCard({ doc, onDelete, onEdit }) {
   }
 
   return (
-    <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3">
-        <FileText size={14} className="text-violet-400 flex-shrink-0" />
+    <div className="kb-card" style={{ overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px' }}>
+        <FileText size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
         {editing ? (
-          <input className="flex-1 text-sm font-medium text-gray-800 border-b border-amber-300 focus:outline-none py-0.5"
-            value={title} onChange={e => setTitle(e.target.value)} autoFocus />
+          <input className="kb-input" style={{ flex: 1, padding: '4px 6px', fontWeight: 600 }} value={title} onChange={e => setTitle(e.target.value)} autoFocus />
         ) : (
-          <span className="flex-1 text-sm font-medium text-gray-800 truncate">{doc.title}</span>
+          <span style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.title}</span>
         )}
-        <span className="text-[11px] text-gray-400 flex-shrink-0">Nota</span>
-        <button onClick={() => setExpanded(e => !e)} className="text-gray-400 hover:text-gray-600 transition-colors">
+        <span className="kb-tag">Documento</span>
+        <button onClick={() => setExpanded(e => !e)} style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
           {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </button>
-        <button onClick={() => onDelete(doc.id)} className="text-gray-300 hover:text-red-400 transition-colors">
+        <button onClick={() => onDelete(doc.id)} style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+          onMouseEnter={e => (e.currentTarget.style.color = 'var(--crimson)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>
           <Trash2 size={14} />
         </button>
       </div>
       {expanded && (
-        <div className="px-4 pb-4 border-t border-gray-50 pt-3 space-y-2">
+        <div style={{ padding: '12px 16px 16px', borderTop: '1px solid var(--border)' }}>
           {editing ? (
             <>
-              <textarea className="w-full text-sm text-gray-600 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-amber-400 resize-none"
-                rows={6} value={content} onChange={e => setContent(e.target.value)} />
-              <div className="flex gap-2 justify-end">
-                <button onClick={cancelEdit} className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5">Cancelar</button>
-                <button onClick={handleSave} disabled={saving}
-                  className="btn-gold" style={{padding:"6px 12px",fontSize:"11px"}}>
+              <textarea className="kb-textarea" rows={6} value={content} onChange={e => setContent(e.target.value)} />
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                <button onClick={cancelEdit} style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '6px 12px', background: 'none', border: 'none', cursor: 'pointer' }}>Cancelar</button>
+                <button onClick={handleSave} disabled={saving} className="btn-gold" style={{ padding: '6px 12px', fontSize: '11px' }}>
                   {saving ? <Loader size={11} className="animate-spin" /> : <Save size={11} />} Guardar
                 </button>
               </div>
             </>
           ) : (
             <>
-              <p className="text-sm text-gray-600 whitespace-pre-wrap">{doc.content}</p>
-              <button onClick={() => setEditing(true)} className="text-xs font-medium" style={{ color: 'var(--gold)' }}>Editar</button>
+              <p style={{ fontSize: '13px', color: 'var(--text-mid)', whiteSpace: 'pre-wrap', lineHeight: 1.55, margin: 0 }}>{doc.content}</p>
+              <button onClick={() => setEditing(true)} style={{ fontSize: '12px', fontWeight: 600, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', marginTop: '8px', padding: 0 }}>Editar</button>
             </>
           )}
         </div>
@@ -479,30 +399,25 @@ function AddNoteModal({ onClose, onSave }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-800">Nueva nota</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(11,23,40,0.45)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+      <div className="kb-card" style={{ width: '100%', maxWidth: '520px', boxShadow: '0 20px 60px rgba(11,23,40,0.25)' }}>
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h2 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)', margin: 0 }}>Nueva nota</h2>
+          <button onClick={onClose} style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}><X size={16} /></button>
         </div>
-        <div className="px-6 py-4 space-y-3">
+        <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">Título</label>
-            <input value={title} onChange={e => setTitle(e.target.value)}
-              placeholder="Ej. Productos, FAQ, Cobertura…" autoFocus
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400" />
+            <label className="kb-label">Título</label>
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Ej. Productos, FAQ, Cobertura…" autoFocus className="kb-input" />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">Contenido</label>
-            <textarea value={content} onChange={e => setContent(e.target.value)}
-              placeholder="Escribe o pega el contenido aquí…" rows={8}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400 resize-none" />
+            <label className="kb-label">Contenido</label>
+            <textarea value={content} onChange={e => setContent(e.target.value)} placeholder="Escribe o pega el contenido aquí…" rows={8} className="kb-textarea" />
           </div>
         </div>
-        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
-          <button onClick={onClose} className="text-xs text-gray-500 px-4 py-2 hover:text-gray-700">Cancelar</button>
-          <button onClick={handleSave} disabled={saving || !title.trim() || !content.trim()}
-            className="btn-gold">
+        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          <button onClick={onClose} style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer' }}>Cancelar</button>
+          <button onClick={handleSave} disabled={saving || !title.trim() || !content.trim()} className="btn-gold">
             {saving ? <Loader size={11} className="animate-spin" /> : <Plus size={11} />} Agregar nota
           </button>
         </div>
@@ -515,61 +430,25 @@ function AddNoteModal({ onClose, onSave }) {
 
 function RuleRow({ rule, index, total, onChange, onRemove, onMove }) {
   return (
-    <div className="flex items-start gap-2">
-      <div className="flex flex-col gap-0.5 pt-2 flex-shrink-0">
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingTop: '8px', flexShrink: 0 }}>
         <button onClick={() => onMove(index, -1)} disabled={index === 0}
-          className="text-gray-300 hover:text-gray-500 disabled:opacity-20 transition-colors">
+          style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', opacity: index === 0 ? 0.2 : 1 }}>
           <ChevronUp size={13} />
         </button>
         <button onClick={() => onMove(index, 1)} disabled={index === total - 1}
-          className="text-gray-300 hover:text-gray-500 disabled:opacity-20 transition-colors">
+          style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', opacity: index === total - 1 ? 0.2 : 1 }}>
           <ChevronDown size={13} />
         </button>
       </div>
-      <span className="text-xs text-gray-400 pt-2.5 w-5 flex-shrink-0 text-right">{index + 1}.</span>
-      <textarea value={rule} onChange={e => onChange(index, e.target.value)} rows={2}
-        className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400 resize-none" />
-      <button onClick={() => onRemove(index)} className="pt-2 text-gray-300 hover:text-red-400 transition-colors flex-shrink-0">
+      <span className="kb-step-num" style={{ marginTop: '9px' }}>{index + 1}</span>
+      <textarea value={rule} onChange={e => onChange(index, e.target.value)} rows={2} className="kb-textarea" style={{ flex: 1 }} />
+      <button onClick={() => onRemove(index)} style={{ paddingTop: '8px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}
+        onMouseEnter={e => (e.currentTarget.style.color = 'var(--crimson)')}
+        onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>
         <X size={14} />
       </button>
     </div>
-  )
-}
-
-// ── Sticky side nav ───────────────────────────────────────────────
-
-function SideNav({ activeSection }) {
-  return (
-    <aside className="sticky top-4 w-44 flex-shrink-0 hidden lg:block">
-      <nav className="space-y-0.5">
-        {SECTIONS.map(s => {
-          const active = activeSection === s.id
-          return (
-            <a
-              key={s.id}
-              href={`#${s.id}`}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '7px 12px',
-                borderRadius: '8px',
-                fontSize: '12px',
-                textDecoration: 'none',
-                fontWeight: active ? 600 : 400,
-                color: active ? 'var(--gold)' : 'var(--text-muted)',
-                background: active ? 'var(--gold-pale)' : 'transparent',
-                borderLeft: active ? '2px solid var(--gold)' : '2px solid transparent',
-                transition: 'all 0.12s',
-              }}
-            >
-              <s.icon size={12} />
-              {s.label}
-            </a>
-          )
-        })}
-      </nav>
-    </aside>
   )
 }
 
@@ -584,7 +463,6 @@ export default function Knowledge() {
   const [saveStatus, setSaveStatus] = useState(null)
   const [showAddNote, setShowAddNote] = useState(false)
   const [isCustomTone, setIsCustomTone] = useState(false)
-  const [activeSection, setActiveSection] = useState('scraper')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -603,20 +481,6 @@ export default function Knowledge() {
 
   useEffect(() => { load() }, [load])
 
-  // Section spy via IntersectionObserver
-  useEffect(() => {
-    const obs = new IntersectionObserver(entries => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) setActiveSection(entry.target.id)
-      }
-    }, { rootMargin: '-30% 0px -60% 0px' })
-    SECTIONS.forEach(s => {
-      const el = document.getElementById(s.id)
-      if (el) obs.observe(el)
-    })
-    return () => obs.disconnect()
-  }, [loading])
-
   const handleSave = async () => {
     setSaving(true)
     setSaveStatus(null)
@@ -625,7 +489,8 @@ export default function Knowledge() {
       setConfig(saved)
       setSaveStatus('ok')
       setTimeout(() => setSaveStatus(null), 3000)
-    } catch {
+    } catch (e) {
+      reportError(e, 'Guardar configuración del agente')
       setSaveStatus('error')
       setTimeout(() => setSaveStatus(null), 4000)
     } finally {
@@ -654,6 +519,13 @@ export default function Knowledge() {
     setDocs(d => d.map(doc => doc.id === id ? updated : doc))
   }
   const handleDeleteDoc = async (id) => {
+    const doc = docs.find(d => d.id === id)
+    const ok = await confirm({
+      title: 'Eliminar documento',
+      message: `¿Eliminar "${doc?.title ?? 'este documento'}" de la base de conocimiento?`,
+      confirmLabel: 'Eliminar', danger: true,
+    })
+    if (!ok) return
     await deleteDoc(id)
     setDocs(d => d.filter(doc => doc.id !== id))
   }
@@ -674,9 +546,9 @@ export default function Knowledge() {
 
   if (loading) {
     return (
-      <PageShell title="Conocimiento" subtitle="Extractor web · Documentos · Persona · Reglas · Idioma">
-        <div className="flex items-center justify-center h-48">
-          <Loader size={24} className="animate-spin text-gray-300" />
+      <PageShell title="Conocimiento" subtitle="Persona · Contexto · Documentos · Reglas · Idioma">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '192px' }}>
+          <Loader size={24} className="animate-spin" style={{ color: 'var(--text-muted)' }} />
         </div>
       </PageShell>
     )
@@ -684,33 +556,27 @@ export default function Knowledge() {
 
   if (loadError || !config) {
     return (
-      <PageShell title="Conocimiento" subtitle="Extractor web · Documentos · Persona · Reglas · Idioma">
-        <div className="flex flex-col items-center justify-center h-48 gap-3">
-          <AlertCircle size={28} className="text-red-300" />
-          <p className="text-sm text-gray-500">{loadError || 'No se pudo cargar la configuración'}</p>
-          <button
-            onClick={load}
-            className="flex items-center gap-2 px-4 py-2 text-xs bg-white border border-gray-200 rounded-lg hover:border-blue-300 text-gray-600 transition-colors"
-          >
-            <Loader size={12} /> Reintentar
-          </button>
+      <PageShell title="Conocimiento" subtitle="Persona · Contexto · Documentos · Reglas · Idioma">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '192px', gap: '12px' }}>
+          <AlertCircle size={28} style={{ color: 'var(--crimson)' }} />
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{loadError || 'No se pudo cargar la configuración'}</p>
+          <button onClick={load} className="btn-outline"><Loader size={12} /> Reintentar</button>
         </div>
       </PageShell>
     )
   }
 
+  const previewName = (config.agent_name || 'el agente').trim()
+  const previewCompany = (config.company_name || 'tu empresa').trim()
+
   return (
-    <PageShell title="Conocimiento" subtitle="Extractor web · Documentos · Persona · Reglas · Idioma">
+    <PageShell title="Conocimiento" subtitle="Persona · Contexto · Documentos · Reglas · Idioma">
       {/* Top bar */}
-      <div className="flex items-center justify-between mb-6">
-        <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-          Todo lo que el agente IA sabe sobre tu negocio
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', gap: '12px', flexWrap: 'wrap' }}>
+        <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
+          Todo lo que <strong style={{ color: 'var(--text-mid)' }}>{previewName}</strong> sabe y cómo se comporta al atender a clientes de <strong style={{ color: 'var(--text-mid)' }}>{previewCompany}</strong>
         </p>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="btn-gold"
-        >
+        <button onClick={handleSave} disabled={saving} className="btn-gold">
           {saving ? <Loader size={13} className="animate-spin" />
             : saveStatus === 'ok' ? <CheckCircle size={13} />
             : saveStatus === 'error' ? <XCircle size={13} />
@@ -719,87 +585,123 @@ export default function Knowledge() {
         </button>
       </div>
 
-      <AgentFlowCard />
+      <OrchestrationCard />
 
-      <div className="flex gap-8">
-        <SideNav activeSection={activeSection} />
+      {/* Main content */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '40px', maxWidth: '860px' }}>
 
-        {/* Main content */}
-        <div className="flex-1 min-w-0 space-y-10">
-
-          {/* ── SCRAPER ──────────────────────────────────────────── */}
+          {/* ── PERSONA ──────────────────────────────────────────── */}
           <section>
-            <SectionHeader
-              id="scraper"
-              icon={Globe}
-              label="Extractor web"
-              sub="Analiza tu sitio y genera documentos de conocimiento automáticamente"
-            />
+            <SectionHeader id="persona" icon={Bot} label="Persona del agente"
+              sub="Quién es, cómo se llama y cómo habla — se ensambla al inicio del prompt" />
             <AgentNote>
-              El contenido importado se guarda como <strong>Documentos de conocimiento</strong>. El agente los consulta automáticamente con <strong>search_knowledge_base</strong> cuando un cliente hace una pregunta específica sobre tu negocio.
+              <strong>Nombre</strong>, <strong>Empresa</strong>, <strong>Género</strong> y <strong>Tono</strong> moldean
+              directamente al agente. La <strong>Línea de identidad</strong> es opcional: si la dejas vacía, se genera
+              automáticamente con el nombre y la empresa. La <strong>Descripción</strong> añade personalidad.
             </AgentNote>
-            <ScraperSection onImport={handleImportDocs} />
+            <div className="kb-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div>
+                  <label className="kb-label">Nombre del agente</label>
+                  <input value={config.agent_name || ''} onChange={e => setField('agent_name', e.target.value)} placeholder="Sara" className="kb-input" />
+                  <p className="kb-hint">El nombre con el que el agente se presenta</p>
+                </div>
+                <div>
+                  <label className="kb-label">Género</label>
+                  <select value={config.agent_gender || 'female'} onChange={e => setField('agent_gender', e.target.value)} className="kb-select">
+                    {GENDER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                  <p className="kb-hint">Afecta los pronombres en español</p>
+                </div>
+              </div>
 
-            <p className="text-[11px] text-gray-400 mt-2">
-              La API key se configura en{' '}
-              <a href="/settings" className="text-amber-600 hover:text-amber-800">Ajustes → Proveedor de IA</a>.
-              Si está configurada, el extractor usa Claude automáticamente.
-            </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div>
+                  <label className="kb-label">Empresa</label>
+                  <input value={config.company_name || ''} onChange={e => setField('company_name', e.target.value)} placeholder="Elevadores del Norte" className="kb-input" />
+                  <p className="kb-hint">La empresa que representa</p>
+                </div>
+                <div>
+                  <label className="kb-label">Tono</label>
+                  <select
+                    value={isCustomTone ? '__custom__' : (config.tone || '')}
+                    onChange={e => {
+                      if (e.target.value === '__custom__') { setIsCustomTone(true); setField('tone', '') }
+                      else { setIsCustomTone(false); setField('tone', e.target.value) }
+                    }}
+                    className="kb-select">
+                    {TONE_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </select>
+                  {isCustomTone && (
+                    <input value={config.tone || ''} onChange={e => setField('tone', e.target.value)} placeholder="Ej. cálido, natural y conciso" className="kb-input" style={{ marginTop: '8px' }} />
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="kb-label">Línea de identidad <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(opcional)</span></label>
+                <textarea value={config.identity_line || ''} onChange={e => setField('identity_line', e.target.value)}
+                  rows={2} placeholder={`Vacío → se genera: "Eres ${previewName}, del equipo de atención al cliente de ${previewCompany}."`} className="kb-textarea" />
+                <p className="kb-hint">Override de la primera línea. Déjala vacía para generarla con Nombre + Empresa.</p>
+              </div>
+
+              <div>
+                <label className="kb-label">Descripción</label>
+                <textarea value={config.agent_description || ''} onChange={e => setField('agent_description', e.target.value)}
+                  rows={4} placeholder="Personalidad y objetivo del agente: a quién atiende, qué busca lograr…" className="kb-textarea" />
+              </div>
+            </div>
           </section>
 
           {/* ── OVERVIEW ─────────────────────────────────────────── */}
           <section>
-            <SectionHeader
-              id="overview"
-              icon={BookOpen}
-              label="Resumen del negocio"
-              sub="El agente siempre ve este texto primero — qué es la empresa, qué vende y el tono"
-            />
+            <SectionHeader id="overview" icon={BookOpen} label="Resumen del negocio"
+              sub="Lo que el agente siempre sabe — qué es la empresa y qué ofrece" />
             <AgentNote>
-              Este texto se inyecta en el <strong>prompt del sistema</strong> bajo la sección <code style={{ background: 'var(--sand-2)', padding: '1px 5px', borderRadius: '3px', fontSize: '11px' }}>CONTEXTO DEL NEGOCIO</code>. Claude lo recibe <em>antes de cada conversación</em> como base de conocimiento general.
+              Este texto se inyecta en el prompt bajo <code className="kb-tag">CONTEXTO DEL NEGOCIO</code>.
+              Claude lo recibe <em>antes de cada conversación</em> como conocimiento general — a diferencia de los
+              Documentos, que solo se consultan cuando hacen falta.
             </AgentNote>
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+            <div className="kb-card" style={{ padding: '20px' }}>
               <textarea
                 value={config.overview || ''}
                 onChange={e => setField('overview', e.target.value)}
                 rows={6}
-                placeholder="Ej. Alamex es una empresa global de elevadores con más de 50 años de experiencia e instalaciones en más de 20 países…"
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400 resize-none"
+                placeholder="Ej. Elevadores del Norte instala y da mantenimiento a elevadores residenciales, comerciales e industriales, con cobertura nacional y servicio 24/7…"
+                className="kb-textarea"
               />
             </div>
           </section>
 
-          {/* ── DOCUMENTS ────────────────────────────────────────── */}
+          {/* ── DOCUMENTS (+ scraper) ────────────────────────────── */}
           <section>
+            <SectionHeader id="docs" icon={FileText} label="Documentos de conocimiento"
+              sub="Fuentes que el agente consulta en tiempo real — no van en el prompt" />
             <AgentNote>
-              Cada documento es una <strong>fuente de verdad</strong> que el agente consulta en tiempo real con <strong>search_knowledge_base</strong>. A diferencia del Resumen (que siempre está en el prompt), los documentos sólo se leen cuando Claude los necesita — lo que ahorra tokens en conversaciones cortas.
+              Cada documento es una <strong>fuente de verdad</strong> que el agente consulta con
+              <strong> search_knowledge_base</strong> cuando necesita responder algo específico. Ahorra tokens:
+              solo se leen cuando Claude los necesita. Usa el <strong>extractor web</strong> para generarlos desde tu sitio.
             </AgentNote>
-            <div className="flex items-start justify-between mb-4">
-              <div id="docs" className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center flex-shrink-0">
-                  <FileText size={15} className="text-amber-600" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-gray-800">Documentos de conocimiento</h2>
-                  <p className="text-xs text-gray-400">{docs.length} documento{docs.length !== 1 ? 's' : ''} — el agente los lee al responder</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowAddNote(true)}
-                className="btn-outline"
-              >
+
+            <ScraperSection onImport={handleImportDocs} />
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '20px 0 12px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
+                {docs.length} documento{docs.length !== 1 ? 's' : ''} guardado{docs.length !== 1 ? 's' : ''}
+              </p>
+              <button onClick={() => setShowAddNote(true)} className="btn-outline">
                 <Plus size={12} /> Agregar nota
               </button>
             </div>
 
             {docs.length === 0 ? (
-              <div className="bg-white border border-dashed border-gray-200 rounded-xl p-8 text-center">
-                <FileText size={28} className="text-gray-200 mx-auto mb-2" />
-                <p className="text-sm text-gray-400">Sin documentos todavía</p>
-                <p className="text-xs text-gray-300 mt-1">Usa el extractor web arriba o agrega notas manualmente</p>
+              <div className="kb-card" style={{ padding: '32px', textAlign: 'center', borderStyle: 'dashed' }}>
+                <FileText size={28} style={{ color: 'var(--border)', margin: '0 auto 8px' }} />
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Sin documentos todavía</p>
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0', opacity: 0.7 }}>Usa el extractor web arriba o agrega notas manualmente</p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {docs.map(doc => (
                   <DocCard key={doc.id} doc={doc} onDelete={handleDeleteDoc} onEdit={handleEditDoc} />
                 ))}
@@ -807,103 +709,28 @@ export default function Knowledge() {
             )}
           </section>
 
-          {/* ── PERSONA ──────────────────────────────────────────── */}
-          <section>
-            <SectionHeader
-              id="persona"
-              icon={Bot}
-              label="Persona del agente"
-              sub="Nombre, género, tono e identidad — cómo se presenta el agente"
-            />
-            <AgentNote>
-              La <strong>Línea de identidad</strong> y la <strong>Descripción</strong> se convierten en las primeras líneas del prompt del sistema — definen quién es el agente. El <strong>Nombre</strong> y <strong>Tono</strong> influyen en cómo Claude construye las respuestas naturalmente.
-            </AgentNote>
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-medium text-gray-600 block mb-1">Nombre del agente</label>
-                  <input value={config.agent_name || ''} onChange={e => setField('agent_name', e.target.value)}
-                    placeholder="Anna"
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400" />
-                  <p className="text-[11px] text-gray-400 mt-0.5">El nombre que usa el agente para sí mismo</p>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-600 block mb-1">Género</label>
-                  <select value={config.agent_gender || 'female'} onChange={e => setField('agent_gender', e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400">
-                    {GENDER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                  <p className="text-[11px] text-gray-400 mt-0.5">Afecta pronombres en español</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-medium text-gray-600 block mb-1">Empresa</label>
-                  <input value={config.company_name || ''} onChange={e => setField('company_name', e.target.value)}
-                    placeholder="Alamex"
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400" />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-600 block mb-1">Tono</label>
-                  <select
-                    value={isCustomTone ? '__custom__' : (config.tone || '')}
-                    onChange={e => {
-                      if (e.target.value === '__custom__') { setIsCustomTone(true); setField('tone', '') }
-                      else { setIsCustomTone(false); setField('tone', e.target.value) }
-                    }}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400">
-                    {TONE_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                  </select>
-                  {isCustomTone && (
-                    <input value={config.tone || ''} onChange={e => setField('tone', e.target.value)}
-                      placeholder="Ej. cálido, natural y conciso" className="w-full mt-2 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400" />
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Línea de identidad</label>
-                <textarea value={config.identity_line || ''} onChange={e => setField('identity_line', e.target.value)}
-                  rows={2} placeholder="Eres Anna, una persona real del equipo de atención al cliente de Alamex…"
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400 resize-none" />
-                <p className="text-[11px] text-gray-400 mt-0.5">La primera línea que define quién es el agente</p>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Descripción</label>
-                <textarea value={config.agent_description || ''} onChange={e => setField('agent_description', e.target.value)}
-                  rows={4} placeholder="Descripción de la personalidad del agente…"
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400 resize-none" />
-              </div>
-
-            </div>
-          </section>
-
           {/* ── RULES ────────────────────────────────────────────── */}
           <section>
-            <SectionHeader
-              id="rules"
-              icon={Sparkles}
-              label="Reglas de comportamiento"
-              sub="Instrucciones que el agente siempre sigue, en orden"
-            />
+            <SectionHeader id="rules" icon={Sparkles} label="Reglas de comportamiento"
+              sub="Instrucciones que el agente sigue siempre, en orden" />
             <AgentNote>
-              Estas reglas se incluyen en el prompt bajo <code style={{ background: 'var(--sand-2)', padding: '1px 5px', borderRadius: '3px', fontSize: '11px' }}>REGLAS DE COMPORTAMIENTO</code>. Úsalas para disparar acciones específicas: <em>"Si el cliente menciona una empresa, llama create_lead"</em>, o para definir límites: <em>"No ofrezcas descuentos sin aprobación"</em>.
+              Se incluyen en el prompt bajo <code className="kb-tag">REGLAS DE COMPORTAMIENTO</code>. Úsalas para
+              disparar acciones: <em>"Si el cliente menciona una empresa, llama create_lead"</em>, o para poner límites:
+              <em> "No ofrezcas descuentos sin aprobación"</em>.
             </AgentNote>
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-3">
-              <div className="space-y-2">
-                {(config.behavior_rules || []).map((rule, i) => (
-                  <RuleRow key={i} rule={rule} index={i} total={config.behavior_rules.length}
-                    onChange={handleRuleChange} onRemove={handleRuleRemove} onMove={handleRuleMove} />
-                ))}
-              </div>
-              {(config.behavior_rules || []).length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-4">Sin reglas — agrega la primera</p>
+            <div className="kb-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {(config.behavior_rules || []).length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {(config.behavior_rules || []).map((rule, i) => (
+                    <RuleRow key={i} rule={rule} index={i} total={config.behavior_rules.length}
+                      onChange={handleRuleChange} onRemove={handleRuleRemove} onMove={handleRuleMove} />
+                  ))}
+                </div>
+              ) : (
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0', margin: 0 }}>Sin reglas — agrega la primera</p>
               )}
               <button onClick={handleRuleAdd}
-                className="flex items-center gap-1.5 text-xs font-medium transition-colors"
-                style={{ color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer' }}>
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
                 <Plus size={13} /> Agregar regla
               </button>
             </div>
@@ -911,38 +738,62 @@ export default function Knowledge() {
 
           {/* ── LANGUAGE ─────────────────────────────────────────── */}
           <section>
-            <SectionHeader
-              id="language"
-              icon={Languages}
-              label="Idioma"
-              sub="Cómo el agente elige el idioma de respuesta"
-            />
+            <SectionHeader id="language" icon={Languages} label="Idioma"
+              sub="Cómo el agente elige el idioma de respuesta" />
             <AgentNote>
-              La política de idioma se agrega al final del prompt del sistema. Con <strong>Espejo</strong>, Claude detecta automáticamente el idioma del cliente y responde en el mismo. Con <strong>Fijo</strong>, siempre usa los idiomas listados (útil para marcas que requieren consistencia).
+              Se agrega al final del prompt. Con <strong>Espejo</strong>, Claude detecta el idioma del cliente y responde
+              igual. Con <strong>Fijo</strong>, usa siempre los idiomas listados (útil para marcas que requieren consistencia).
             </AgentNote>
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-4">
+            <div className="kb-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Política de idioma</label>
-                <select value={config.language_policy || 'mirror'} onChange={e => setField('language_policy', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400">
+                <label className="kb-label">Política de idioma</label>
+                <select value={config.language_policy || 'mirror'} onChange={e => setField('language_policy', e.target.value)} className="kb-select">
                   <option value="mirror">Espejo del cliente — responde en el mismo idioma</option>
                   <option value="fixed">Idioma fijo — usa siempre los idiomas soportados</option>
                 </select>
-                <p className="text-[11px] text-gray-400 mt-0.5">El idioma se detecta automáticamente del último mensaje del cliente</p>
+                <p className="kb-hint">El idioma se detecta automáticamente del último mensaje del cliente</p>
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Idiomas soportados</label>
-                <input value={config.supported_languages || ''} onChange={e => setField('supported_languages', e.target.value)}
-                  placeholder="es, en, ar"
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-amber-400 font-mono" />
-                <p className="text-[11px] text-gray-400 mt-0.5">Códigos separados por coma. El idioma de reserva es español.</p>
+                <label className="kb-label">Idiomas soportados</label>
+                <input value={config.supported_languages || ''} onChange={e => setField('supported_languages', e.target.value)} placeholder="es, en, ar" className="kb-input kb-mono" />
+                <p className="kb-hint">Códigos separados por coma. El idioma de reserva es español.</p>
               </div>
             </div>
           </section>
 
+          {/* ── TOOLS: system (read-only) + custom ───────────────── */}
+          <section>
+            <SectionHeader id="tools" icon={Wrench} label="Herramientas del agente"
+              sub="Acciones que el agente ejecuta — del sistema (siempre activas) y las que tú creas" />
+            <AgentNote>
+              Las <strong>del sistema</strong> vienen siempre incluidas. Las <strong>personalizadas</strong> las
+              defines tú sin escribir código: el agente las llama y nuestra plataforma las ejecuta de forma segura.
+            </AgentNote>
+
+            <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 8px' }}>Del sistema</p>
+            <div className="kb-card" style={{ padding: '8px', marginBottom: '24px' }}>
+              {[
+                ['search_knowledge_base', 'Consulta los Documentos antes de responder preguntas del negocio.'],
+                ['create_lead', 'Registra un interesado cuando el cliente quiere comprar o cotizar.'],
+                ['create_followup', 'Agenda un seguimiento cuando el cliente pide que lo contacten.'],
+                ['handoff_to_human', 'Deriva la conversación a un agente humano cuando hace falta.'],
+              ].map(([name, desc], i, arr) => (
+                <div key={name} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 12px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                  <Zap size={13} style={{ color: 'var(--jade)', flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <span className="kb-tag" style={{ background: 'var(--jade-pale)', color: 'var(--jade)' }}>{name}</span>
+                    <p style={{ fontSize: '12px', color: 'var(--text-mid)', margin: '4px 0 0', lineHeight: 1.45 }}>{desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 8px' }}>Personalizadas</p>
+            <CustomTools />
+          </section>
+
           {/* Bottom spacer */}
-          <div className="h-16" />
-        </div>
+          <div style={{ height: '64px' }} />
       </div>
 
       {showAddNote && (

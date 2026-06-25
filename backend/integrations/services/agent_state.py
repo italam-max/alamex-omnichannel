@@ -13,5 +13,8 @@ class AgentState(TypedDict):
     model: str
     max_tokens: int
     should_handoff: bool
+    # Relevance / anti-spam gate. When False, the agent stays silent (no reply sent).
+    should_respond: bool
+    relevance_enabled: bool
     total_input_tokens: int
     total_output_tokens: int

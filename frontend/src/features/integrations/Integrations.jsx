@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import PageShell from '../../components/layout/PageShell'
 import {
-  CheckCircle, XCircle, ExternalLink, MessageSquare,
+  CheckCircle, XCircle, MessageSquare,
   Settings, Eye, EyeOff, Loader, Plus, ToggleLeft, ToggleRight, Trash2, RefreshCw, Bot
 } from 'lucide-react'
 import { listChannels, createChannel, updateChannel, deleteChannel, testChannel } from '../../services/channels'
+import { confirm } from '../../store/confirm'
+import { reportError } from '../../store/errors'
 
 const WEBHOOK_URL = `${window.location.protocol}//${window.location.hostname}:8000/api/integrations/webhook/meta/`
 
@@ -53,10 +55,10 @@ const CHANNEL_FIELDS = {
 }
 
 const CHANNEL_META = {
-  whatsapp:  { label: 'WhatsApp',       color: 'green',  dot: 'bg-green-500' },
-  messenger: { label: 'Messenger',      color: 'blue',   dot: 'bg-blue-500' },
-  instagram: { label: 'Instagram',      color: 'pink',   dot: 'bg-pink-500' },
-  website:   { label: 'Website Widget', color: 'amber',  dot: 'bg-amber-500' },
+  whatsapp:  { label: 'WhatsApp',       color: 'green',  dot: '#25D366' },
+  messenger: { label: 'Messenger',      color: 'blue',   dot: '#0084FF' },
+  instagram: { label: 'Instagram',      color: 'pink',   dot: '#E1306C' },
+  website:   { label: 'Website Widget', color: 'amber',  dot: 'var(--gold)' },
 }
 
 
@@ -66,18 +68,20 @@ function SecretInput({ value, onChange, placeholder, disabled }) {
   const [show, setShow] = useState(false)
   const isMasked = value === '••••••••'
   return (
-    <div className="relative">
+    <div style={{ position: 'relative' }}>
       <input
         type={show && !isMasked ? 'text' : 'password'}
         value={isMasked ? '' : value}
         onChange={e => onChange(e.target.value)}
         placeholder={isMasked ? '(guardado — dejar vacío para no cambiar)' : placeholder}
         disabled={disabled}
-        className="w-full pr-9 pl-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-mono disabled:bg-gray-50"
+        className="kb-input kb-mono"
+        style={{ paddingRight: '36px' }}
       />
       {!isMasked && (
         <button type="button" onClick={() => setShow(s => !s)}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+          aria-label={show ? 'Ocultar valor' : 'Mostrar valor'}
+          style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
           {show ? <EyeOff size={14} /> : <Eye size={14} />}
         </button>
       )}
@@ -109,66 +113,67 @@ function ChannelModal({ channel, onSave, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(11,23,40,0.45)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+      <div className="kb-card" style={{ width: '100%', maxWidth: '512px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(11,23,40,0.25)' }}>
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <h2 className="text-sm font-semibold text-gray-800">Configurar canal</h2>
-            <p className="text-xs text-gray-400 mt-0.5">{CHANNEL_META[channel.type]?.label}</p>
+            <h2 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)', margin: 0 }}>Configurar canal</h2>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0' }}>{CHANNEL_META[channel.type]?.label}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+          <button onClick={onClose} aria-label="Cerrar"
+            style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', lineHeight: 1 }}>✕</button>
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+        <div className="space-y-4" style={{ overflowY: 'auto', flex: 1, padding: '16px 24px' }}>
           {/* Channel name */}
           <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">Nombre del canal</label>
+            <label className="kb-label">Nombre del canal</label>
             <input
               value={name}
               onChange={e => setName(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400"
+              className="kb-input"
               placeholder="Ej. WhatsApp Principal"
             />
           </div>
 
           {/* Webhook URL (read-only) */}
           <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">Webhook URL <span className="text-gray-400">(pegar en Meta)</span></label>
-            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-              <code className="text-xs text-gray-600 flex-1 truncate">{WEBHOOK_URL}</code>
+            <label className="kb-label">Webhook URL <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(pegar en Meta)</span></label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--sand)', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 12px' }}>
+              <code style={{ fontSize: '12px', color: 'var(--text-mid)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{WEBHOOK_URL}</code>
               <button onClick={() => navigator.clipboard.writeText(WEBHOOK_URL)}
-                className="text-[11px] text-amber-700 hover:text-amber-900 font-medium flex-shrink-0">Copiar</button>
+                style={{ fontSize: '11px', color: 'var(--gold)', fontWeight: 600, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer' }}>Copiar</button>
             </div>
           </div>
 
           {/* Embed snippet for website widget */}
           {channel.type === 'website' && creds.widget_key && (
             <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">Código para tu sitio web</label>
-              <div className="flex items-start gap-2 bg-gray-900 rounded-lg px-3 py-2.5">
-                <code className="text-xs text-green-400 flex-1 break-all">
+              <label className="kb-label">Código para tu sitio web</label>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', background: 'var(--ink)', borderRadius: '8px', padding: '10px 12px' }}>
+                <code style={{ fontSize: '12px', color: 'var(--gold-light)', flex: 1, wordBreak: 'break-all' }}>
                   {`<script src="${window.location.protocol}//${window.location.hostname}:8000/widget.js" data-key="${creds.widget_key}" defer></script>`}
                 </code>
                 <button onClick={() => navigator.clipboard.writeText(`<script src="${window.location.protocol}//${window.location.hostname}:8000/widget.js" data-key="${creds.widget_key}" defer></script>`)}
-                  className="text-[11px] text-blue-400 hover:text-blue-300 font-medium flex-shrink-0">Copiar</button>
+                  style={{ fontSize: '11px', color: 'var(--gold-light)', fontWeight: 600, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer' }}>Copiar</button>
               </div>
-              <p className="text-[11px] text-gray-400 mt-1">Pega este código antes de <code className="bg-gray-100 px-1 rounded">&lt;/body&gt;</code> en tu sitio web.</p>
+              <p className="kb-hint">Pega este código antes de <code style={{ background: 'var(--sand-2)', padding: '0 4px', borderRadius: '4px' }}>&lt;/body&gt;</code> en tu sitio web.</p>
             </div>
           )}
 
           {/* Credential fields */}
           <div className="space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
               {channel.type === 'website' ? 'Configuración' : 'Credenciales'}
             </p>
             {fields.map((f, i) => {
               if (f.divider) return (
-                <div key={`divider-${i}`} className="pt-3">
+                <div key={`divider-${i}`} style={{ paddingTop: '12px' }}>
                   <div className="flex items-center gap-2 mb-3">
-                    <Bot size={13} className="text-amber-600" />
-                    <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">{f.label}</span>
+                    <Bot size={13} style={{ color: 'var(--gold)' }} />
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{f.label}</span>
                     <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
                   </div>
                   <div style={{
@@ -187,13 +192,15 @@ function ChannelModal({ channel, onSave, onClose }) {
               if (f.boolean) return (
                 <div key={f.key} className="flex items-center justify-between py-1">
                   <div>
-                    <span className="text-xs font-medium text-gray-600">{f.label}</span>
-                    <p className="text-[11px] text-gray-400">{f.help}</p>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-mid)' }}>{f.label}</span>
+                    <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0 }}>{f.help}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setCreds(c => ({ ...c, [f.key]: !c[f.key] }))}
-                    className={`flex-shrink-0 transition-colors ${creds[f.key] ? 'text-amber-600' : 'text-gray-300'}`}
+                    aria-label={creds[f.key] ? `Desactivar ${f.label}` : `Activar ${f.label}`}
+                    className="flex-shrink-0"
+                    style={{ color: creds[f.key] ? 'var(--gold)' : 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', transition: 'color 0.15s' }}
                   >
                     {creds[f.key] ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
                   </button>
@@ -201,7 +208,7 @@ function ChannelModal({ channel, onSave, onClose }) {
               )
               return (
                 <div key={f.key}>
-                  <label className="text-xs font-medium text-gray-600 block mb-1">{f.label}</label>
+                  <label className="kb-label">{f.label}</label>
                   {f.secret ? (
                     <SecretInput
                       value={creds[f.key] || ''}
@@ -214,39 +221,41 @@ function ChannelModal({ channel, onSave, onClose }) {
                       onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
                       placeholder={f.placeholder}
                       rows={3}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 resize-none"
+                      className="kb-textarea"
+                      style={{ resize: 'none' }}
                     />
                   ) : f.color ? (
                     <div className="flex items-center gap-2">
                       <input type="color" value={creds[f.key] || '#e7a518'}
                         onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
-                        className="w-10 h-9 rounded border border-gray-200 cursor-pointer p-0.5" />
+                        style={{ width: '40px', height: '36px', borderRadius: '8px', border: '1px solid var(--border)', cursor: 'pointer', padding: '2px' }} />
                       <input value={creds[f.key] || '#e7a518'}
                         onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
                         placeholder={f.placeholder}
-                        className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-mono" />
+                        className="kb-input kb-mono"
+                        style={{ flex: 1 }} />
                     </div>
                   ) : f.select ? (
                     <select value={creds[f.key] || f.select[0]}
                       onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400">
+                      className="kb-select">
                       {f.select.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                   ) : f.readonly ? (
-                    <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                      <code className="text-xs text-gray-600 flex-1 truncate">{creds[f.key] || '(se generará al guardar)'}</code>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--sand)', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 12px' }}>
+                      <code style={{ fontSize: '12px', color: 'var(--text-mid)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{creds[f.key] || '(se generará al guardar)'}</code>
                       {creds[f.key] && <button onClick={() => navigator.clipboard.writeText(creds[f.key])}
-                        className="text-[11px] text-amber-700 hover:text-amber-900 font-medium flex-shrink-0">Copiar</button>}
+                        style={{ fontSize: '11px', color: 'var(--gold)', fontWeight: 600, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer' }}>Copiar</button>}
                     </div>
                   ) : (
                     <input
                       value={creds[f.key] || ''}
                       onChange={e => setCreds(c => ({ ...c, [f.key]: e.target.value }))}
                       placeholder={f.placeholder}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-mono"
+                      className="kb-input kb-mono"
                     />
                   )}
-                  <p className="text-[11px] text-gray-400 mt-0.5">{f.help}</p>
+                  <p className="kb-hint">{f.help}</p>
                 </div>
               )
             })}
@@ -254,7 +263,12 @@ function ChannelModal({ channel, onSave, onClose }) {
 
           {/* Test result */}
           {testResult && (
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${testResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+            <div className="flex items-center gap-2"
+              style={{
+                padding: '8px 12px', borderRadius: '8px', fontSize: '12px',
+                background: testResult.ok ? 'var(--jade-pale)' : 'var(--crimson-pale)',
+                color: testResult.ok ? 'var(--jade)' : 'var(--crimson)',
+              }}>
               {testResult.ok ? <CheckCircle size={13} /> : <XCircle size={13} />}
               {testResult.detail}
             </div>
@@ -262,17 +276,18 @@ function ChannelModal({ channel, onSave, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex items-center gap-2 justify-between">
+        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between' }}>
           <button
             onClick={handleTest}
             disabled={testing}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            className="btn-outline"
           >
             {testing ? <Loader size={13} className="animate-spin" /> : <CheckCircle size={13} />}
             Probar conexión
           </button>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 text-xs text-gray-500 hover:text-gray-700 transition-colors">Cancelar</button>
+            <button onClick={onClose}
+              style={{ padding: '8px 16px', fontSize: '12px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>Cancelar</button>
             <button
               onClick={() => onSave({ ...channel, name, credentials: creds })}
               className="btn-gold"
@@ -294,26 +309,29 @@ function ChannelCard({ channel, onEdit, onToggle, onDelete }) {
   const filledCount = fields.filter(f => f.key && !f.boolean && (channel.credentials || {})[f.key]).length
 
   return (
-    <div className={`bg-white rounded-xl border shadow-sm p-5 transition-all ${channel.is_active ? 'border-gray-100' : 'border-gray-100 opacity-60'}`}>
+    <div className="card-warm transition-all" style={{ padding: '20px', opacity: channel.is_active ? 1 : 0.6 }}>
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2.5">
-          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${channel.is_active ? meta.dot : 'bg-gray-300'}`} />
+          <span className="flex-shrink-0" style={{ width: '10px', height: '10px', borderRadius: '99px', background: channel.is_active ? meta.dot : 'var(--text-muted)' }} />
           <div>
-            <h3 className="text-sm font-semibold text-gray-800">{channel.name}</h3>
-            <p className="text-xs text-gray-400">{meta.label}</p>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{channel.name}</h3>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>{meta.label}</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
           <button onClick={() => onToggle(channel)} title={channel.is_active ? 'Desactivar' : 'Activar'}
-            className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400">
-            {channel.is_active ? <ToggleRight size={18} className="text-amber-700" /> : <ToggleLeft size={18} />}
+            aria-label={channel.is_active ? 'Desactivar canal' : 'Activar canal'}
+            style={{ padding: '6px', borderRadius: '8px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', color: channel.is_active ? 'var(--gold)' : 'var(--text-muted)' }}>
+            {channel.is_active ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
           </button>
           <button onClick={() => onEdit(channel)} title="Configurar"
-            className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400">
+            aria-label="Configurar canal"
+            style={{ padding: '6px', borderRadius: '8px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', color: 'var(--text-muted)' }}>
             <Settings size={15} />
           </button>
           <button onClick={() => onDelete(channel)} title="Eliminar"
-            className="p-1.5 hover:bg-red-50 rounded-lg transition-colors text-gray-300 hover:text-red-400">
+            aria-label="Eliminar canal"
+            style={{ padding: '6px', borderRadius: '8px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', color: 'var(--text-muted)' }}>
             <Trash2 size={15} />
           </button>
         </div>
@@ -321,13 +339,13 @@ function ChannelCard({ channel, onEdit, onToggle, onDelete }) {
 
       {/* Progress bar */}
       <div className="mb-3">
-        <div className="flex justify-between text-[11px] text-gray-400 mb-1">
+        <div className="flex justify-between mb-1" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
           <span>Configuración</span>
           <span>{filledCount}/{fields.length} campos</span>
         </div>
-        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-          <div className={`h-full rounded-full transition-all ${filledCount === fields.length ? 'bg-emerald-500' : 'bg-amber-400'}`}
-            style={{ width: `${(filledCount / fields.length) * 100}%` }} />
+        <div style={{ height: '6px', background: 'var(--sand-2)', borderRadius: '99px', overflow: 'hidden' }}>
+          <div className="transition-all"
+            style={{ height: '100%', borderRadius: '99px', background: filledCount === fields.length ? 'var(--jade)' : 'var(--gold)', width: `${(filledCount / fields.length) * 100}%` }} />
         </div>
       </div>
 
@@ -336,11 +354,11 @@ function ChannelCard({ channel, onEdit, onToggle, onDelete }) {
         {fields.map(f => {
           const val = (channel.credentials || {})[f.key]
           return (
-            <div key={f.key} className="flex items-center gap-2 text-[11px]">
+            <div key={f.key} className="flex items-center gap-2" style={{ fontSize: '11px' }}>
               {val
-                ? <CheckCircle size={11} className="text-emerald-500 flex-shrink-0" />
-                : <XCircle size={11} className="text-gray-300 flex-shrink-0" />}
-              <span className={val ? 'text-gray-500' : 'text-gray-300'}>{f.label}</span>
+                ? <CheckCircle size={11} className="flex-shrink-0" style={{ color: 'var(--jade)' }} />
+                : <XCircle size={11} className="flex-shrink-0" style={{ color: 'var(--text-muted)' }} />}
+              <span style={{ color: val ? 'var(--text-mid)' : 'var(--text-muted)' }}>{f.label}</span>
             </div>
           )
         })}
@@ -355,14 +373,14 @@ function AddChannelModal({ onAdd, onClose }) {
   const [type, setType] = useState('whatsapp')
   const [name, setName] = useState('')
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-        <h2 className="text-sm font-semibold text-gray-800 mb-4">Agregar canal</h2>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(11,23,40,0.45)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+      <div className="kb-card" style={{ width: '100%', maxWidth: '384px', padding: '24px', boxShadow: '0 20px 60px rgba(11,23,40,0.25)' }}>
+        <h2 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)', margin: '0 0 16px' }}>Agregar canal</h2>
         <div className="space-y-3 mb-5">
           <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">Tipo de canal</label>
+            <label className="kb-label">Tipo de canal</label>
             <select value={type} onChange={e => setType(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400">
+              className="kb-select">
               <option value="whatsapp">WhatsApp</option>
               <option value="messenger">Messenger</option>
               <option value="instagram">Instagram</option>
@@ -370,13 +388,14 @@ function AddChannelModal({ onAdd, onClose }) {
             </select>
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">Nombre del canal</label>
+            <label className="kb-label">Nombre del canal</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Ej. WhatsApp Principal"
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400" />
+              className="kb-input" />
           </div>
         </div>
         <div className="flex gap-2 justify-end">
-          <button onClick={onClose} className="px-4 py-2 text-xs text-gray-500">Cancelar</button>
+          <button onClick={onClose}
+            style={{ padding: '8px 16px', fontSize: '12px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>Cancelar</button>
           <button disabled={!name.trim()} onClick={() => onAdd({ type, name: name.trim() })}
             className="btn-gold">
             Crear
@@ -411,9 +430,11 @@ export default function Integrations() {
 
   useEffect(() => { load() }, [])
 
-  const showError = (msg) => {
-    setApiError(msg)
-    setTimeout(() => setApiError(''), 5000)
+  // Logs a trackable incident (code + history via ErrorCenter) and shows a
+  // persistent inline note referencing the code. No auto-dismiss.
+  const showError = (context, error) => {
+    const code = reportError(error, context)
+    setApiError(`${context} · código ${code}`)
   }
 
   const handleSave = async (updated) => {
@@ -426,7 +447,7 @@ export default function Integrations() {
       setChannels(cs => cs.map(c => c.id === saved.id ? saved : c))
       setEditing(null)
     } catch (e) {
-      showError('Error al guardar: ' + (e.response?.data?.detail || e.message))
+      showError('No se pudo guardar el canal', e)
     }
   }
 
@@ -440,7 +461,7 @@ export default function Integrations() {
       setAdding(false)
       setEditing(created)
     } catch (e) {
-      showError('Error al crear canal: ' + (e.response?.data?.detail || e.message))
+      showError('No se pudo crear el canal', e)
     }
   }
 
@@ -449,17 +470,22 @@ export default function Integrations() {
       const updated = await updateChannel(ch.id, { is_active: !ch.is_active })
       setChannels(cs => cs.map(c => c.id === updated.id ? updated : c))
     } catch (e) {
-      showError('Error al cambiar estado: ' + (e.response?.data?.detail || e.message))
+      showError('No se pudo cambiar el estado del canal', e)
     }
   }
 
   const handleDelete = async (ch) => {
-    if (!window.confirm(`¿Eliminar el canal "${ch.name}"?`)) return
+    const ok = await confirm({
+      title: 'Eliminar canal',
+      message: `¿Eliminar el canal "${ch.name}"? Esta acción no se puede deshacer.`,
+      confirmLabel: 'Eliminar', danger: true,
+    })
+    if (!ok) return
     try {
       await deleteChannel(ch.id)
       setChannels(cs => cs.filter(c => c.id !== ch.id))
     } catch (e) {
-      showError('Error al eliminar: ' + (e.response?.data?.detail || e.message))
+      showError('No se pudo eliminar el canal', e)
     }
   }
 
@@ -469,10 +495,11 @@ export default function Integrations() {
     <PageShell title="Canales" subtitle="Configura tus conexiones con WhatsApp, Messenger e Instagram">
       {/* Stats bar */}
       <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-4 text-sm text-gray-500">
-          <span><strong className="text-gray-800">{channels.length}</strong> canales</span>
-          <span><strong className="text-emerald-600">{active}</strong> activos</span>
-          <button onClick={load} className="p-1 hover:bg-gray-100 rounded-lg text-gray-400 transition-colors">
+        <div className="flex items-center gap-4" style={{ fontSize: '14px', color: 'var(--text-mid)' }}>
+          <span><strong style={{ color: 'var(--text)' }}>{channels.length}</strong> canales</span>
+          <span><strong style={{ color: 'var(--jade)' }}>{active}</strong> activos</span>
+          <button onClick={load} aria-label="Recargar canales"
+            style={{ padding: '4px', borderRadius: '8px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', color: 'var(--text-muted)' }}>
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
@@ -484,7 +511,7 @@ export default function Integrations() {
       </div>
 
       {apiError && (
-        <div className="mb-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">{apiError}</div>
+        <div className="mb-4" style={{ padding: '10px 16px', background: 'var(--crimson-pale)', border: '1px solid var(--crimson)', borderRadius: '8px', fontSize: '12px', color: 'var(--crimson)' }}>{apiError}</div>
       )}
 
       {/* Webhook info banner */}
@@ -522,10 +549,11 @@ export default function Integrations() {
 
       {/* Channel grid */}
       {channels.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 text-gray-400 gap-3">
-          <MessageSquare size={36} className="text-gray-200" />
-          <p className="text-sm">Sin canales configurados</p>
-          <button onClick={() => setAdding(true)} className="text-xs text-amber-700 hover:text-amber-800 font-medium">+ Agregar el primero</button>
+        <div className="flex flex-col items-center justify-center h-48 gap-3" style={{ color: 'var(--text-muted)' }}>
+          <MessageSquare size={36} style={{ color: 'var(--sand-2)' }} />
+          <p style={{ fontSize: '14px', margin: 0 }}>Sin canales configurados</p>
+          <button onClick={() => setAdding(true)}
+            style={{ fontSize: '12px', color: 'var(--gold)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>+ Agregar el primero</button>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

@@ -57,10 +57,42 @@ def _build_system_prompt() -> str:
         return FALLBACK_SYSTEM
 
     parts = []
-    if config.identity_line:
-        parts.append(config.identity_line)
+
+    # ── PERSONA ──────────────────────────────────────────────────────
+    # Nombre, empresa, tono y género SIEMPRE moldean al agente. La línea
+    # de identidad es un override opcional: si está vacía, se genera con
+    # el nombre y la empresa, de modo que cambiar esos campos en la UI
+    # cambia realmente cómo se presenta el agente.
+    name    = (config.agent_name or '').strip()
+    company = (config.company_name or '').strip()
+    tone    = (config.tone or '').strip()
+    identity = (config.identity_line or '').strip()
+    persona = []
+
+    if identity:
+        persona.append(identity)
+    elif name and company:
+        persona.append(f"Eres {name}, del equipo de atención al cliente de {company}.")
+    elif name:
+        persona.append(f"Eres {name}, del equipo de atención al cliente.")
+    elif company:
+        persona.append(f"Eres parte del equipo de atención al cliente de {company}.")
+
     if config.agent_description:
-        parts.append(config.agent_description)
+        persona.append(config.agent_description.strip())
+    if tone:
+        persona.append(f"Tu tono al responder es {tone}.")
+
+    gender_note = {
+        'female': "Cuando hables de ti, usa el género femenino.",
+        'male':   "Cuando hables de ti, usa el género masculino.",
+    }.get(config.agent_gender)
+    if gender_note and (name or identity):
+        persona.append(gender_note)
+
+    if persona:
+        parts.append("\n".join(persona))
+
     if config.overview:
         parts.append("=== CONTEXTO DEL NEGOCIO ===\n" + config.overview)
 
@@ -72,10 +104,27 @@ def _build_system_prompt() -> str:
     if config.language_policy == 'mirror':
         parts.append("Responde siempre en el mismo idioma que usa el cliente.")
     elif config.supported_languages:
-        parts.append(f"Idiomas soportados: {config.supported_languages}.")
+        parts.append(f"Responde siempre en uno de estos idiomas: {config.supported_languages} (por defecto español).")
 
     parts.append(_TOOLS_ES)
     return "\n\n".join(parts) if parts else FALLBACK_SYSTEM
+
+
+# ── Model client cache ────────────────────────────────────────────
+# ChatAnthropic builds an httpx client on construction; rebuilding it on every
+# model turn is wasteful. Cache one client per (model, max_tokens, timeout) and
+# bind tools per call (binding is cheap — no network/client creation).
+_chat_clients: dict = {}
+
+
+def _chat_client(model: str, max_tokens: int, timeout: int = 60):
+    key = (model, max_tokens, timeout)
+    client = _chat_clients.get(key)
+    if client is None:
+        api_key = getattr(settings, 'ANTHROPIC_API_KEY', '').strip()
+        client = ChatAnthropic(model=model, api_key=api_key, max_tokens=max_tokens, timeout=timeout)
+        _chat_clients[key] = client
+    return client
 
 
 # ── Billing helpers ───────────────────────────────────────────────
@@ -90,15 +139,21 @@ def _has_funds() -> bool:
 
 def _deduct_credits(channel, model: str, input_tokens: int, output_tokens: int, conv_id=None) -> None:
     try:
+        from decimal import Decimal
         from billing.models import CreditAccount, CreditTransaction
         from django.db import transaction as db_tx
 
         with db_tx.atomic():
-            account = CreditAccount.objects.select_for_update().filter(pk=1).first()
-            if not account:
-                account = CreditAccount.get_solo()
+            # Ensure the singleton row exists, then lock it inside the txn so the
+            # read-modify-write is serialized against concurrent deductions.
+            CreditAccount.objects.get_or_create(pk=1)
+            account = CreditAccount.objects.select_for_update().get(pk=1)
+
             cost = account.compute_cost(model, input_tokens, output_tokens)
-            account.balance_usd -= cost
+            # The transaction records the true cost; the stored balance never
+            # goes below zero (a partial overspend on the last call is absorbed).
+            new_balance = max(Decimal('0'), account.balance_usd - cost)
+            account.balance_usd = new_balance
             account.save(update_fields=['balance_usd', 'updated_at'])
 
             desc = f'Canal {channel.id}'
@@ -108,71 +163,131 @@ def _deduct_credits(channel, model: str, input_tokens: int, output_tokens: int, 
             CreditTransaction.objects.create(
                 type=CreditTransaction.TYPE_USAGE,
                 amount_usd=-cost,
-                balance_after=account.balance_usd,
+                balance_after=new_balance,
                 model_used=model,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 channel_id=channel.id,
                 description=desc,
             )
-            if account.balance_usd <= account.alert_threshold_usd:
-                logger.warning('[Credits] Low balance: $%.4f USD remaining', account.balance_usd)
+            if new_balance <= account.alert_threshold_usd:
+                logger.warning('[Credits] Low balance: $%.4f USD remaining', new_balance)
     except Exception as exc:
         logger.error('[Credits] Failed to record usage: %s', exc)
 
 
-# ── Graph nodes ───────────────────────────────────────────────────
+# ── Relevance / anti-spam gate ────────────────────────────────────
 
-def _node_call_model(state: AgentState) -> dict:
-    api_key = getattr(settings, 'ANTHROPIC_API_KEY', '').strip()
-    model = ChatAnthropic(
-        model=state['model'],
-        api_key=api_key,
-        max_tokens=state['max_tokens'],
-        timeout=60,
-    ).bind_tools(AGENT_TOOLS)
+RELEVANCE_MODEL = 'claude-haiku-4-5-20251001'  # cheapest — classifier only
+
+_RELEVANCE_SYSTEM = (
+    "Eres un clasificador. Decide si un mensaje de cliente en un chat de atención "
+    "requiere una respuesta del negocio.\n"
+    "Responde SOLO con una palabra:\n"
+    "- RESPONDER: si el mensaje hace una pregunta, pide algo, expresa intención de "
+    "compra, da información relevante o continúa una conversación de soporte/ventas.\n"
+    "- IGNORAR: si es spam, publicidad, un simple acuse ('ok', 'gracias', '👍'), "
+    "un emoji o sticker suelto, texto sin sentido, o un mensaje que no requiere "
+    "ninguna acción del negocio.\n"
+    "Ante la duda, responde RESPONDER."
+)
+
+
+def _last_human_text(messages) -> str:
+    for m in reversed(messages):
+        if isinstance(m, HumanMessage):
+            return m.content if isinstance(m.content, str) else ''
+    return ''
+
+
+def _node_check_relevance(state: AgentState) -> dict:
+    """Cheap pre-filter: decide whether the incoming message warrants a reply."""
+    if not state.get('relevance_enabled', True):
+        return {'should_respond': True}
+
+    text = _last_human_text(state['messages']).strip()
+
+    # Zero-cost heuristics for the obvious cases.
+    if len(text) < 2:
+        logger.info('[Relevance] IGNORE (too short) conv=%s', state.get('conversation_id'))
+        return {'should_respond': False}
 
     try:
-        response = model.invoke(state['messages'])
-    except (anthropic_sdk.APITimeoutError, anthropic_sdk.APIConnectionError) as exc:
-        logger.warning('[Agent] Claude connection error (timeout/network): %s', exc)
-        fallback = _AIMsg(content="Lo siento, la respuesta tardó demasiado. Por favor intenta de nuevo.")
+        classifier = _chat_client(RELEVANCE_MODEL, max_tokens=4, timeout=20)
+        verdict = classifier.invoke([
+            SystemMessage(content=_RELEVANCE_SYSTEM),
+            HumanMessage(content=text),
+        ])
+        decision = (verdict.content if isinstance(verdict.content, str) else '').upper()
+        usage = getattr(verdict, 'usage_metadata', None) or {}
+        should_respond = 'IGNORAR' not in decision
+        logger.info('[Relevance] conv=%s decision=%s respond=%s',
+                    state.get('conversation_id'), decision.strip(), should_respond)
         return {
-            'messages': [fallback],
-            'total_input_tokens': state.get('total_input_tokens', 0),
-            'total_output_tokens': state.get('total_output_tokens', 0),
-        }
-    except anthropic_sdk.RateLimitError as exc:
-        logger.warning('[Agent] Claude rate limit: %s', exc)
-        fallback = _AIMsg(content="Estamos recibiendo muchas solicitudes. Intenta en unos segundos.")
-        return {
-            'messages': [fallback],
-            'total_input_tokens': state.get('total_input_tokens', 0),
-            'total_output_tokens': state.get('total_output_tokens', 0),
+            'should_respond': should_respond,
+            'total_input_tokens': state.get('total_input_tokens', 0) + usage.get('input_tokens', 0),
+            'total_output_tokens': state.get('total_output_tokens', 0) + usage.get('output_tokens', 0),
         }
     except Exception as exc:
-        logger.error('[Agent] Claude error: %s', exc)
+        # Fail open — never drop a real message because the classifier broke.
+        logger.warning('[Relevance] classifier error, defaulting to respond: %s', exc)
+        return {'should_respond': True}
+
+
+def _route_after_relevance(state: AgentState) -> str:
+    return 'call_model' if state.get('should_respond', True) else 'finalize'
+
+
+# ── Graph nodes ───────────────────────────────────────────────────
+
+def _make_call_model(tools):
+    """call_model node bound to a specific tool set (core + active custom)."""
+    def _node_call_model(state: AgentState) -> dict:
+        model = _chat_client(state['model'], state['max_tokens']).bind_tools(tools)
+
+        try:
+            response = model.invoke(state['messages'])
+        except (anthropic_sdk.APITimeoutError, anthropic_sdk.APIConnectionError) as exc:
+            logger.warning('[Agent] Claude connection error (timeout/network): %s', exc)
+            fallback = _AIMsg(content="Lo siento, la respuesta tardó demasiado. Por favor intenta de nuevo.")
+            return {
+                'messages': [fallback],
+                'total_input_tokens': state.get('total_input_tokens', 0),
+                'total_output_tokens': state.get('total_output_tokens', 0),
+            }
+        except anthropic_sdk.RateLimitError as exc:
+            logger.warning('[Agent] Claude rate limit: %s', exc)
+            fallback = _AIMsg(content="Estamos recibiendo muchas solicitudes. Intenta en unos segundos.")
+            return {
+                'messages': [fallback],
+                'total_input_tokens': state.get('total_input_tokens', 0),
+                'total_output_tokens': state.get('total_output_tokens', 0),
+            }
+        except Exception as exc:
+            logger.error('[Agent] Claude error: %s', exc)
+            return {
+                'messages': [],
+                'total_input_tokens': state.get('total_input_tokens', 0),
+                'total_output_tokens': state.get('total_output_tokens', 0),
+            }
+
+        usage = getattr(response, 'usage_metadata', None) or {}
+        input_tokens = usage.get('input_tokens', 0)
+        output_tokens = usage.get('output_tokens', 0)
+
+        logger.debug(
+            '[Agent] call_model model=%s in=%s out=%s tool_calls=%s',
+            state['model'], input_tokens, output_tokens,
+            len(response.tool_calls) if hasattr(response, 'tool_calls') else 0,
+        )
+
         return {
-            'messages': [],
-            'total_input_tokens': state.get('total_input_tokens', 0),
-            'total_output_tokens': state.get('total_output_tokens', 0),
+            'messages': [response],
+            'total_input_tokens': state.get('total_input_tokens', 0) + input_tokens,
+            'total_output_tokens': state.get('total_output_tokens', 0) + output_tokens,
         }
 
-    usage = getattr(response, 'usage_metadata', None) or {}
-    input_tokens = usage.get('input_tokens', 0)
-    output_tokens = usage.get('output_tokens', 0)
-
-    logger.debug(
-        '[Agent] call_model model=%s in=%s out=%s tool_calls=%s',
-        state['model'], input_tokens, output_tokens,
-        len(response.tool_calls) if hasattr(response, 'tool_calls') else 0,
-    )
-
-    return {
-        'messages': [response],
-        'total_input_tokens': state.get('total_input_tokens', 0) + input_tokens,
-        'total_output_tokens': state.get('total_output_tokens', 0) + output_tokens,
-    }
+    return _node_call_model
 
 
 def _route_after_model(state: AgentState) -> str:
@@ -206,15 +321,20 @@ def _node_finalize(state: AgentState) -> dict:
 
 # ── Build and compile the graph ───────────────────────────────────
 
-def _build_graph():
-    tool_node = ToolNode(AGENT_TOOLS)
+def _build_graph(tools):
+    tool_node = ToolNode(tools)
 
     builder = StateGraph(AgentState)
-    builder.add_node('call_model', _node_call_model)
+    builder.add_node('check_relevance', _node_check_relevance)
+    builder.add_node('call_model', _make_call_model(tools))
     builder.add_node('execute_tools', tool_node)
     builder.add_node('finalize', _node_finalize)
 
-    builder.set_entry_point('call_model')
+    builder.set_entry_point('check_relevance')
+    builder.add_conditional_edges('check_relevance', _route_after_relevance, {
+        'call_model': 'call_model',
+        'finalize': 'finalize',
+    })
     builder.add_conditional_edges('call_model', _route_after_model, {
         'execute_tools': 'execute_tools',
         'finalize': 'finalize',
@@ -225,8 +345,28 @@ def _build_graph():
     return builder.compile()
 
 
-# Compiled once at import time — invocation is cheap, compilation is not
-_graph = _build_graph()
+# Compiled graphs cached by active-tool signature. Compilation is expensive;
+# the tool set rarely changes, so we rebuild only when custom tools change.
+_graph_cache: dict = {}
+
+
+def _get_graph():
+    """Return a compiled graph for the current core + active custom tools."""
+    try:
+        from .custom_tools import build_custom_tools, active_tools_signature
+        sig = active_tools_signature()
+        cached = _graph_cache.get(sig)
+        if cached is not None:
+            return cached
+        tools = AGENT_TOOLS + build_custom_tools()
+    except Exception as exc:
+        logger.error('[Agent] custom tools unavailable, using core only: %s', exc)
+        sig, tools = 'core-only', AGENT_TOOLS
+
+    graph = _build_graph(tools)
+    _graph_cache.clear()           # single-tenant: keep only the latest
+    _graph_cache[sig] = graph
+    return graph
 
 
 # ── Public API ────────────────────────────────────────────────────
@@ -284,6 +424,13 @@ def run_agent(channel, conversation, incoming_text: str) -> tuple:
     system_prompt = _build_system_prompt()
     initial_messages = [SystemMessage(content=system_prompt)] + lc_messages
 
+    # Relevance/anti-spam gate is controlled by the workspace business rules.
+    try:
+        from accounts.models import Workspace
+        relevance_enabled = Workspace.get_solo().relevance_filter_enabled
+    except Exception:
+        relevance_enabled = True
+
     initial_state: AgentState = {
         'messages': initial_messages,
         'channel_id': channel.id,
@@ -291,17 +438,33 @@ def run_agent(channel, conversation, incoming_text: str) -> tuple:
         'model': model,
         'max_tokens': max_tokens,
         'should_handoff': False,
+        'should_respond': True,
+        'relevance_enabled': relevance_enabled,
         'total_input_tokens': 0,
         'total_output_tokens': 0,
     }
 
+    from .custom_tools import current_conversation_id
+    token = current_conversation_id.set(conversation.id)
     try:
-        final_state = _graph.invoke(initial_state)
+        final_state = _get_graph().invoke(initial_state)
     except Exception as exc:
         logger.error('[Agent] Graph error for channel %s: %s', channel.id, exc)
         return None, False
+    finally:
+        current_conversation_id.reset(token)
 
     should_handoff = final_state.get('should_handoff', False)
+
+    # Relevance gate decided the message does not warrant a reply (anti-spam).
+    if not final_state.get('should_respond', True):
+        total_in = final_state.get('total_input_tokens', 0)
+        total_out = final_state.get('total_output_tokens', 0)
+        if total_in or total_out:
+            _deduct_credits(channel, RELEVANCE_MODEL, total_in, total_out, conv_id=conversation.id)
+        logger.info('[Agent] channel=%s conv=%s — silent (irrelevant message)',
+                    channel.id, conversation.id)
+        return None, False
 
     # Extract the last AI text response (AIMessage only, never HumanMessage)
     from langchain_core.messages import AIMessage as LCAIMessage

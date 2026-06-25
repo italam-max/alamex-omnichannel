@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../../store/auth'
 import { Eye, EyeOff, Loader } from 'lucide-react'
 import axios from 'axios'
+import AlmenaraMark from '../../components/brand/AlmenaraMark'
 
 export default function Login() {
   const { login } = useAuth()
@@ -58,45 +59,48 @@ export default function Login() {
       <div style={{
         background: 'var(--surface)',
         border: '1px solid var(--border)',
-        borderRadius: '16px',
+        borderRadius: '18px',
         width: '100%',
-        maxWidth: '360px',
-        padding: '36px 32px',
+        maxWidth: '396px',
+        padding: '0',
         position: 'relative',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        overflow: 'hidden',
+        boxShadow: '0 30px 80px rgba(0,0,0,0.45)',
       }}>
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px' }}>
-          <div style={{ position: 'relative', width: '36px', height: '36px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{
-              position: 'absolute', inset: 0, transform: 'rotate(45deg)',
-              borderRadius: '4px', background: 'var(--gold)', opacity: 0.18,
-            }} />
-            <div style={{
-              position: 'absolute', inset: '4px', transform: 'rotate(45deg)',
-              borderRadius: '3px', background: 'var(--gold)',
-            }} />
-            <span style={{ position: 'relative', zIndex: 1, color: 'var(--ink)', fontSize: '13px', fontWeight: 700 }}>A</span>
-          </div>
-          <div>
-            <p style={{ color: 'var(--text)', fontWeight: 700, fontSize: '15px', lineHeight: 1.1, letterSpacing: '1.5px', textTransform: 'uppercase', margin: 0 }}>Alamex</p>
-            <p style={{ color: 'var(--gold)', fontSize: '9px', letterSpacing: '2.5px', textTransform: 'uppercase', margin: '2px 0 0' }}>Omnichannel</p>
-          </div>
-        </div>
+        {/* Gold hairline crown */}
+        <div style={{ height: '3px', background: 'linear-gradient(90deg, transparent, var(--gold) 45%, var(--gold-light) 55%, transparent)' }} />
 
-        <h1 style={{
-          margin: '0 0 4px',
-          fontSize: '18px',
-          fontWeight: 700,
-          color: 'var(--text)',
-          fontFamily: "Georgia, 'Palatino Linotype', 'Book Antiqua', serif",
-          letterSpacing: '-0.3px',
-        }}>
-          Bienvenido
-        </h1>
-        <p style={{ margin: '0 0 24px', fontSize: '12px', color: 'var(--text-muted)' }}>
-          Accede a tu plataforma
-        </p>
+        <div style={{ padding: '40px 36px 32px' }}>
+          {/* Beacon hero — centered, glowing */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginBottom: '26px' }}>
+            <div style={{
+              width: '76px', height: '76px', borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'radial-gradient(circle at 50% 42%, rgba(192,155,58,0.16), transparent 70%)',
+              marginBottom: '14px',
+            }}>
+              <AlmenaraMark size={58} tower="var(--gold)" light="var(--gold-light)" pulse />
+            </div>
+            <p style={{ color: 'var(--text)', fontWeight: 700, fontSize: '22px', lineHeight: 1, letterSpacing: '6px', textTransform: 'uppercase', margin: 0, fontFamily: "Georgia, 'Palatino Linotype', serif", paddingLeft: '6px' }}>
+              Almenara
+            </p>
+            <p style={{ color: 'var(--gold)', fontSize: '9.5px', letterSpacing: '3.5px', textTransform: 'uppercase', margin: '8px 0 0' }}>
+              Plataforma Omnicanal
+            </p>
+          </div>
+
+          {/* Hairline divider */}
+          <div style={{ height: '1px', background: 'var(--border)', margin: '0 0 24px' }} />
+
+          <h1 style={{
+            margin: '0 0 4px', fontSize: '19px', fontWeight: 700, color: 'var(--text)',
+            fontFamily: "Georgia, 'Palatino Linotype', 'Book Antiqua', serif", letterSpacing: '-0.2px',
+          }}>
+            Bienvenido de vuelta
+          </h1>
+          <p style={{ margin: '0 0 24px', fontSize: '12.5px', color: 'var(--text-muted)' }}>
+            Ingresa a tu centro de operaciones
+          </p>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
@@ -173,9 +177,10 @@ export default function Login() {
           </button>
         </form>
 
-        <p style={{ textAlign: 'center', fontSize: '10px', color: 'var(--text-muted)', marginTop: '20px', opacity: 0.6 }}>
-          Plataforma de mensajería empresarial · Alamex
-        </p>
+          <p style={{ textAlign: 'center', fontSize: '10px', color: 'var(--text-muted)', marginTop: '22px', letterSpacing: '0.4px', opacity: 0.65 }}>
+            Mensajería empresarial · cada canal, un solo faro
+          </p>
+        </div>
       </div>
     </div>
   )

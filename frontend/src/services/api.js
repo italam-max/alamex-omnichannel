@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { getToken } from '../store/auth'
+import { reportError } from '../store/errors'
 
 const REFRESH_KEY = 'alamex_refresh'
 
@@ -33,6 +34,14 @@ api.interceptors.response.use(
           // refresh failed — let the caller handle the 401
         }
       }
+    }
+
+    // Log genuine breakages (network down or 5xx) as trackable incidents.
+    // 4xx (validation/permission) stay caller-handled and shown inline.
+    const status = error.response?.status
+    const silent = error.config?.meta?.silent
+    if (!silent && (!status || status >= 500)) {
+      reportError(error, 'Error de comunicación con el servidor')
     }
     return Promise.reject(error)
   },

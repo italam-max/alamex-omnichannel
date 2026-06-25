@@ -18,6 +18,12 @@ from langgraph.types import Command
 logger = logging.getLogger(__name__)
 
 
+def _close_thread_connection():
+    """Close the worker-thread DB connection (ToolNode runs tools off-thread)."""
+    from .custom_tools import _close_thread_connection as _close
+    _close()
+
+
 @tool
 def search_knowledge_base(query: str) -> str:
     """
@@ -28,17 +34,20 @@ def search_knowledge_base(query: str) -> str:
     from django.db.models import Q
     from knowledge.models import KnowledgeDoc
 
-    docs = KnowledgeDoc.objects.filter(is_active=True).filter(
-        Q(title__icontains=query) | Q(content__icontains=query)
-    ).order_by('order', 'created_at')[:5]
+    try:
+        docs = KnowledgeDoc.objects.filter(is_active=True).filter(
+            Q(title__icontains=query) | Q(content__icontains=query)
+        ).order_by('order', 'created_at')[:5]
 
-    if not docs.exists():
-        docs = KnowledgeDoc.objects.filter(is_active=True).order_by('order', 'created_at')[:3]
+        if not docs.exists():
+            docs = KnowledgeDoc.objects.filter(is_active=True).order_by('order', 'created_at')[:3]
 
-    if not docs.exists():
-        return "No hay información disponible en la base de conocimiento."
+        if not docs.exists():
+            return "No hay información disponible en la base de conocimiento."
 
-    return "\n\n".join(f"[{d.title}]\n{d.content}" for d in docs)
+        return "\n\n".join(f"[{d.title}]\n{d.content}" for d in docs)
+    finally:
+        _close_thread_connection()
 
 
 @tool
@@ -93,6 +102,8 @@ def create_lead(
     except Exception as exc:
         logger.error('[Agent] create_lead error: %s', exc)
         return "No se pudo crear el lead en este momento."
+    finally:
+        _close_thread_connection()
 
 
 @tool
@@ -124,6 +135,8 @@ def create_followup(
     except Exception as exc:
         logger.error('[Agent] create_followup error: %s', exc)
         return "No se pudo agendar el seguimiento en este momento."
+    finally:
+        _close_thread_connection()
 
 
 AGENT_TOOLS = [

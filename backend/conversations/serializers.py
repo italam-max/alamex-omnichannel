@@ -67,7 +67,11 @@ class MessageSerializer(serializers.ModelSerializer):
 class ConversationSerializer(serializers.ModelSerializer):
     messages = MessageSerializer(many=True, read_only=True)
     contact = ContactSerializer(read_only=True)
+    assigned_to_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
         fields = '__all__'
+
+    def get_assigned_to_name(self, obj):
+        return obj.assigned_to.name if obj.assigned_to else None

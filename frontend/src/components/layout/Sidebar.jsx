@@ -2,25 +2,32 @@ import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   MessageSquare, LayoutDashboard, Users, BookOpen,
-  Plug, Globe, LogOut, Settings2, ChevronLeft, ChevronRight,
+  Plug, Globe, LogOut, Settings2, ChevronLeft, ChevronRight, UserCog, Inbox,
 } from 'lucide-react'
 import { useAuth } from '../../store/auth'
+import { useMe } from '../../store/me'
+import AlmenaraMark from '../brand/AlmenaraMark'
+import pkg from '../../../package.json'
 
+// Each item declares the permission it requires. Items the current role
+// can't access are filtered out; groups with no visible items are hidden.
 const NAV_GROUPS = [
   {
     label: 'Plataforma',
     items: [
-      { to: '/',               icon: LayoutDashboard, label: 'Overview',       end: true },
-      { to: '/inbox',          icon: MessageSquare,   label: 'Inbox' },
-      { to: '/leads',          icon: Users,           label: 'Seguimientos' },
+      { to: '/',               icon: LayoutDashboard, label: 'Overview',       end: true, perm: 'view_all_convs' },
+      { to: '/inbox',          icon: MessageSquare,   label: 'Inbox',                     perm: 'view_all_convs' },
+      { to: '/agent',          icon: Inbox,           label: 'Mi Bandeja',                perm: 'attend_convs' },
+      { to: '/leads',          icon: Users,           label: 'Seguimientos',              perm: 'view_all_convs' },
     ],
   },
   {
-    label: 'Configuración',
+    label: 'Administración',
     items: [
-      { to: '/knowledge',      icon: BookOpen, label: 'Conocimiento' },
-      { to: '/integrations',   icon: Plug,     label: 'Canales' },
-      { to: '/widget-test',    icon: Globe,    label: 'Prueba Widget' },
+      { to: '/agents',         icon: UserCog,  label: 'Agentes',       perm: 'manage_agents' },
+      { to: '/knowledge',      icon: BookOpen, label: 'Conocimiento',  perm: 'configure_rules' },
+      { to: '/integrations',   icon: Plug,     label: 'Canales',       perm: 'manage_channels' },
+      { to: '/widget-test',    icon: Globe,    label: 'Prueba Widget', perm: 'manage_channels' },
     ],
   },
 ]
@@ -32,6 +39,15 @@ const IVORY = '#FBF7EE'
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()
+  const can = useMe(s => s.can)
+  const role = useMe(s => s.role)
+
+  // Filter items by role permission; drop groups that end up empty.
+  const groups = NAV_GROUPS
+    .map(g => ({ ...g, items: g.items.filter(it => can(it.perm)) }))
+    .filter(g => g.items.length > 0)
+
+  const canSettings = can('configure_rules') || can('view_billing')
 
   const W = collapsed ? 56 : 240
 
@@ -64,11 +80,9 @@ export default function Sidebar() {
         overflow: 'hidden',
         transition: 'padding 0.22s',
       }}>
-        {/* Diamond mark */}
-        <div style={{ position: 'relative', width: '32px', height: '32px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ position: 'absolute', inset: 0, transform: 'rotate(45deg)', borderRadius: '3px', background: GOLD, opacity: 0.18 }} />
-          <div style={{ position: 'absolute', inset: '4px', transform: 'rotate(45deg)', borderRadius: '2px', background: GOLD }} />
-          <span style={{ position: 'relative', zIndex: 1, color: INK, fontSize: '12px', fontWeight: 800 }}>A</span>
+        {/* Almenara beacon mark */}
+        <div style={{ width: '34px', height: '34px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <AlmenaraMark size={32} tower={GOLD} light="#D4B05A" pulse />
         </div>
 
         {/* Brand text — fades out when collapsed */}
@@ -79,19 +93,19 @@ export default function Sidebar() {
           transition: 'max-width 0.22s cubic-bezier(0.4,0,0.2,1), opacity 0.15s',
           whiteSpace: 'nowrap',
         }}>
-          <p style={{ color: IVORY, fontWeight: 700, fontSize: '14px', lineHeight: 1.1, letterSpacing: '1.5px', textTransform: 'uppercase', margin: 0 }}>
-            Alamex
+          <p style={{ color: IVORY, fontWeight: 700, fontSize: '15px', lineHeight: 1, letterSpacing: '3px', textTransform: 'uppercase', margin: 0, fontFamily: "Georgia, 'Palatino Linotype', serif" }}>
+            Almenara
           </p>
-          <p style={{ color: GOLD, fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', margin: '2px 0 0' }}>
-            Omnichannel
+          <p style={{ color: GOLD, fontSize: '8.5px', letterSpacing: '2.5px', textTransform: 'uppercase', margin: '4px 0 0' }}>
+            Plataforma Omnicanal
           </p>
         </div>
       </div>
 
       {/* Nav groups */}
       <nav style={{ flex: 1, padding: collapsed ? '16px 0' : '16px 8px', overflowY: 'auto', overflowX: 'hidden' }}>
-        {NAV_GROUPS.map((group, gi) => (
-          <div key={group.label} style={{ marginBottom: gi < NAV_GROUPS.length - 1 ? '20px' : 0 }}>
+        {groups.map((group, gi) => (
+          <div key={group.label} style={{ marginBottom: gi < groups.length - 1 ? '20px' : 0 }}>
             {/* Group label */}
             {!collapsed && (
               <p style={{
@@ -215,6 +229,7 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div style={{ padding: collapsed ? '10px 0' : '10px 8px' }}>
+        {canSettings && (
         <NavLink
           to="/settings"
           title={collapsed ? 'Ajustes' : undefined}
@@ -245,6 +260,7 @@ export default function Sidebar() {
             Ajustes
           </span>
         </NavLink>
+        )}
 
         <button
           onClick={() => useAuth.getState().logout()}
@@ -285,7 +301,9 @@ export default function Sidebar() {
             transition: 'max-width 0.22s cubic-bezier(0.4,0,0.2,1), opacity 0.12s',
             whiteSpace: 'nowrap',
           }}>
-            <p style={{ color: 'rgba(251,247,238,0.85)', fontSize: '12px', fontWeight: 500, margin: 0 }}>Admin</p>
+            <p style={{ color: 'rgba(251,247,238,0.85)', fontSize: '12px', fontWeight: 500, margin: 0 }}>
+              {role === 'admin' ? 'Administrador' : role === 'supervisor' ? 'Supervisor' : 'Agente'}
+            </p>
             <p style={{ color: 'rgba(251,247,238,0.3)', fontSize: '10px', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
               italam@alam.mx
             </p>
@@ -298,6 +316,21 @@ export default function Sidebar() {
             maxWidth: collapsed ? 0 : '12px',
           }} />
         </button>
+
+        {/* App version */}
+        <p style={{
+          color: 'rgba(251,247,238,0.22)',
+          fontSize: '9px',
+          letterSpacing: '0.5px',
+          textAlign: 'center',
+          margin: '6px 0 2px',
+          height: collapsed ? 0 : 'auto',
+          opacity: collapsed ? 0 : 1,
+          overflow: 'hidden',
+          transition: 'opacity 0.12s',
+        }}>
+          Almenara v{pkg.version}
+        </p>
       </div>
     </aside>
   )
