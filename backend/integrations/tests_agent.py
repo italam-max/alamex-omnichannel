@@ -518,7 +518,7 @@ class TestCustomToolIntegration:
 
         calls = []
         orig_dispatch = custom_tools._dispatch
-        def spy(ct, args):
+        def spy(ct, args, organization=None):
             calls.append((ct.name, args))
             return 'ok'
 

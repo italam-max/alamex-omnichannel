@@ -1,5 +1,6 @@
 from decimal import Decimal
 from django.db import models
+from accounts.tenancy import TenantOwned
 
 # Anthropic list prices USD per 1M tokens (input / output)
 MODEL_PRICING = {
@@ -10,7 +11,7 @@ MODEL_PRICING = {
 _DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
 
 
-class CreditAccount(models.Model):
+class CreditAccount(TenantOwned):
     """Singleton (pk=1) — platform-wide credit balance and billing config."""
     balance_usd        = models.DecimalField(max_digits=12, decimal_places=4, default=Decimal('0'))
     markup_multiplier  = models.DecimalField(max_digits=6,  decimal_places=2, default=Decimal('5.00'),
@@ -21,11 +22,24 @@ class CreditAccount(models.Model):
 
     class Meta:
         verbose_name = 'Credit Account'
+        constraints = [
+            models.UniqueConstraint(fields=['organization'], name='uniq_creditaccount_org'),
+        ]
+
+    @classmethod
+    def get_for_org(cls, organization):
+        obj, _ = cls.objects.get_or_create(organization=organization)
+        return obj
 
     @classmethod
     def get_solo(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
-        return obj
+        # Per-org singleton; raises without an org context (defense in depth).
+        from accounts.tenancy import get_current_organization, TenantContextMissing
+        org = get_current_organization()
+        if org is None:
+            raise TenantContextMissing(
+                f'{cls.__name__}.get_solo() called without an organization context.')
+        return cls.get_for_org(org)
 
     def compute_cost(self, model: str, input_tokens: int, output_tokens: int) -> Decimal:
         pricing = MODEL_PRICING.get(model, MODEL_PRICING[_DEFAULT_MODEL])
@@ -42,7 +56,7 @@ class CreditAccount(models.Model):
         return self.balance_usd > Decimal('0')
 
 
-class CreditTransaction(models.Model):
+class CreditTransaction(TenantOwned):
     TYPE_TOPUP = 'topup'
     TYPE_USAGE = 'usage'
     TYPE_CHOICES = [(TYPE_TOPUP, 'Recarga'), (TYPE_USAGE, 'Consumo')]

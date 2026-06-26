@@ -56,7 +56,8 @@ def _get_or_create_widget_contact(channel: Channel, session_id: str, visitor_nam
     contact, created = Contact.objects.get_or_create(
         external_id=external_id,
         channel=channel,
-        defaults={"name": visitor_name or f"Visitante {session_id[:8]}"},
+        defaults={"name": visitor_name or f"Visitante {session_id[:8]}",
+                  "organization_id": channel.organization_id},
     )
     if not created and visitor_name and contact.name.startswith("Visitante"):
         contact.name = visitor_name
@@ -71,7 +72,8 @@ def _get_or_create_widget_conversation(contact: Contact, channel: Channel) -> Co
     ).exclude(status="blocked").order_by("-updated_at").first()
     if not conversation:
         conversation = Conversation.objects.create(
-            contact=contact, channel=channel, status="active", ai_active=True
+            contact=contact, channel=channel, status="active", ai_active=True,
+            organization_id=channel.organization_id,
         )
     return conversation
 
@@ -157,7 +159,8 @@ class WidgetMessageView(APIView):
 
         contact, _ = _get_or_create_widget_contact(channel, session_id, visitor_name)
         conversation = _get_or_create_widget_conversation(contact, channel)
-        Message.objects.create(conversation=conversation, role="customer", content=text)
+        Message.objects.create(conversation=conversation, role="customer", content=text,
+                               organization_id=conversation.organization_id)
 
         # AI agent (configured per channel) or fallback placeholder
         ai_reply, should_handoff = get_ai_response(channel, conversation, text)
@@ -178,6 +181,7 @@ class WidgetMessageView(APIView):
             role="ai",
             content=ai_reply,
             model_used=model_tag,
+            organization_id=conversation.organization_id,
         )
 
         resp = Response({

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   MessageSquare, LayoutDashboard, Users, BookOpen,
-  Plug, Globe, LogOut, Settings2, ChevronLeft, ChevronRight, UserCog, Inbox,
+  Plug, Globe, LogOut, Settings2, UserCog, Inbox, Building2,
 } from 'lucide-react'
 import { useAuth } from '../../store/auth'
 import { useMe } from '../../store/me'
@@ -32,20 +32,40 @@ const NAV_GROUPS = [
   },
 ]
 
-const INK   = '#0B1728'
 const GOLD  = '#C09B3A'
 const IVORY = '#FBF7EE'
 
+function userInitials(name = '') {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  return parts.map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'A'
+}
+
 export default function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false)
+  // Sidebar is always expanded — the collapse control was removed by request.
+  const collapsed = false
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   const location = useLocation()
   const can = useMe(s => s.can)
   const role = useMe(s => s.role)
+  const me = useMe(s => s.me)
+  const isSuperuser = useMe(s => s.isSuperuser)
+
+  const roleLabel = role === 'admin' ? 'Administrador' : role === 'supervisor' ? 'Supervisor' : 'Agente'
+  const displayName = me?.name || roleLabel
+  const displayEmail = me?.email || ''
 
   // Filter items by role permission; drop groups that end up empty.
   const groups = NAV_GROUPS
     .map(g => ({ ...g, items: g.items.filter(it => can(it.perm)) }))
     .filter(g => g.items.length > 0)
+
+  // Operator (owner) console — superuser only, cross-organization.
+  if (isSuperuser) {
+    groups.push({
+      label: 'Operador',
+      items: [{ to: '/operador', icon: Building2, label: 'Empresas' }],
+    })
+  }
 
   const canSettings = can('configure_rules') || can('view_billing')
 
@@ -61,8 +81,9 @@ export default function Sidebar() {
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
-        background: INK,
+        background: 'linear-gradient(180deg, #0C1A2E 0%, #0B1728 55%, #091320 100%)',
         borderRight: '1px solid rgba(192,155,58,0.18)',
+        boxShadow: 'inset -1px 0 0 rgba(0,0,0,0.2)',
         transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1), min-width 0.22s cubic-bezier(0.4,0,0.2,1)',
         overflow: 'hidden',
         position: 'relative',
@@ -93,7 +114,7 @@ export default function Sidebar() {
           transition: 'max-width 0.22s cubic-bezier(0.4,0,0.2,1), opacity 0.15s',
           whiteSpace: 'nowrap',
         }}>
-          <p style={{ color: IVORY, fontWeight: 700, fontSize: '15px', lineHeight: 1, letterSpacing: '3px', textTransform: 'uppercase', margin: 0, fontFamily: "Georgia, 'Palatino Linotype', serif" }}>
+          <p style={{ color: IVORY, fontWeight: 700, fontSize: '15px', lineHeight: 1, letterSpacing: '3px', textTransform: 'uppercase', margin: 0, fontFamily: 'var(--font-display)' }}>
             Almenara
           </p>
           <p style={{ color: GOLD, fontSize: '8.5px', letterSpacing: '2.5px', textTransform: 'uppercase', margin: '4px 0 0' }}>
@@ -122,7 +143,10 @@ export default function Sidebar() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
               {group.items.map(({ to, icon: Icon, label, end }) => {
-                const isActive = end ? location.pathname === to : location.pathname.startsWith(to)
+                // Match on path-segment boundaries so `/agent` (Mi Bandeja) is
+                // NOT highlighted when on `/agents` (Agentes), and vice versa.
+                const isActive = location.pathname === to
+                  || (!end && location.pathname.startsWith(to + '/'))
                 return (
                   <NavLink
                     key={to}
@@ -194,38 +218,7 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Collapse toggle button */}
-      <button
-        onClick={() => setCollapsed(c => !c)}
-        title={collapsed ? 'Expandir menú' : 'Colapsar menú'}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: '100%',
-          padding: '10px 0',
-          border: 'none',
-          borderTop: '1px solid rgba(192,155,58,0.1)',
-          borderBottom: '1px solid rgba(192,155,58,0.1)',
-          background: 'transparent',
-          color: 'rgba(251,247,238,0.25)',
-          cursor: 'pointer',
-          transition: 'color 0.15s, background 0.15s',
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.color = GOLD
-          e.currentTarget.style.background = 'rgba(192,155,58,0.07)'
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.color = 'rgba(251,247,238,0.25)'
-          e.currentTarget.style.background = 'transparent'
-        }}
-      >
-        {collapsed
-          ? <ChevronRight size={14} />
-          : <ChevronLeft size={14} />
-        }
-      </button>
+      <div style={{ borderTop: '1px solid rgba(192,155,58,0.1)' }} />
 
       {/* Footer */}
       <div style={{ padding: collapsed ? '10px 0' : '10px 8px' }}>
@@ -262,60 +255,106 @@ export default function Sidebar() {
         </NavLink>
         )}
 
-        <button
-          onClick={() => useAuth.getState().logout()}
-          title={collapsed ? 'Cerrar sesión' : undefined}
-          style={{
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            gap: '10px',
-            padding: collapsed ? '8px 0' : '7px 14px',
-            borderRadius: '8px',
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            transition: 'background 0.12s',
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-        >
-          {/* Avatar */}
-          <div style={{
-            width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
-            background: 'rgba(192,155,58,0.13)',
-            border: '1px solid rgba(192,155,58,0.3)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: GOLD, fontSize: '10px', fontWeight: 700,
-          }}>
-            A
-          </div>
+        <div style={{ position: 'relative' }}>
+          {/* User menu — opens above the row; explicit logout lives here so
+              clicking your name never signs you out by accident. */}
+          {userMenuOpen && (
+            <>
+              <div
+                onClick={() => setUserMenuOpen(false)}
+                style={{ position: 'fixed', inset: 0, zIndex: 30 }}
+              />
+              <div style={{
+                position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, right: 0,
+                zIndex: 31,
+                background: '#0E1D33',
+                border: '1px solid rgba(192,155,58,0.25)',
+                borderRadius: '10px',
+                boxShadow: '0 8px 28px rgba(0,0,0,0.45)',
+                overflow: 'hidden',
+              }}>
+                <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(192,155,58,0.12)' }}>
+                  <p style={{ color: IVORY, fontSize: '12px', fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {displayName}
+                  </p>
+                  <p style={{ color: 'rgba(251,247,238,0.4)', fontSize: '10px', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {displayEmail || roleLabel}
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setUserMenuOpen(false); useAuth.getState().logout() }}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
+                    padding: '9px 12px', background: 'transparent', border: 'none',
+                    color: 'rgba(251,247,238,0.85)', fontSize: '12px', cursor: 'pointer',
+                    textAlign: 'left', transition: 'background 0.12s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <LogOut size={13} /> Cerrar sesión
+                </button>
+              </div>
+            </>
+          )}
 
-          {/* User info — fades out when collapsed */}
-          <div style={{
-            flex: 1, minWidth: 0, textAlign: 'left',
-            overflow: 'hidden',
-            maxWidth: collapsed ? 0 : '200px',
-            opacity: collapsed ? 0 : 1,
-            transition: 'max-width 0.22s cubic-bezier(0.4,0,0.2,1), opacity 0.12s',
-            whiteSpace: 'nowrap',
-          }}>
-            <p style={{ color: 'rgba(251,247,238,0.85)', fontSize: '12px', fontWeight: 500, margin: 0 }}>
-              {role === 'admin' ? 'Administrador' : role === 'supervisor' ? 'Supervisor' : 'Agente'}
-            </p>
-            <p style={{ color: 'rgba(251,247,238,0.3)', fontSize: '10px', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              italam@alam.mx
-            </p>
-          </div>
+          <button
+            onClick={() => setUserMenuOpen(o => !o)}
+            title={collapsed ? displayName : undefined}
+            aria-haspopup="menu"
+            aria-expanded={userMenuOpen}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: collapsed ? 'center' : 'flex-start',
+              gap: '10px',
+              padding: collapsed ? '8px 0' : '7px 14px',
+              borderRadius: '8px',
+              background: userMenuOpen ? 'rgba(255,255,255,0.05)' : 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'background 0.12s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+            onMouseLeave={e => { if (!userMenuOpen) e.currentTarget.style.background = 'transparent' }}
+          >
+            {/* Avatar */}
+            <div style={{
+              width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
+              background: 'rgba(192,155,58,0.13)',
+              border: '1px solid rgba(192,155,58,0.3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: GOLD, fontSize: '10px', fontWeight: 700,
+            }}>
+              {userInitials(displayName)}
+            </div>
 
-          <LogOut size={12} style={{
-            color: 'rgba(251,247,238,0.2)', flexShrink: 0,
-            opacity: collapsed ? 0 : 1,
-            transition: 'opacity 0.12s',
-            maxWidth: collapsed ? 0 : '12px',
-          }} />
-        </button>
+            {/* User info — fades out when collapsed */}
+            <div style={{
+              flex: 1, minWidth: 0, textAlign: 'left',
+              overflow: 'hidden',
+              maxWidth: collapsed ? 0 : '200px',
+              opacity: collapsed ? 0 : 1,
+              transition: 'max-width 0.22s cubic-bezier(0.4,0,0.2,1), opacity 0.12s',
+              whiteSpace: 'nowrap',
+            }}>
+              <p style={{ color: 'rgba(251,247,238,0.85)', fontSize: '12px', fontWeight: 500, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {displayName}
+              </p>
+              <p style={{ color: 'rgba(251,247,238,0.3)', fontSize: '10px', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {displayEmail || roleLabel}
+              </p>
+            </div>
+
+            <LogOut size={12} style={{
+              color: 'rgba(251,247,238,0.2)', flexShrink: 0,
+              opacity: collapsed ? 0 : 1,
+              transition: 'opacity 0.12s',
+              maxWidth: collapsed ? 0 : '12px',
+            }} />
+          </button>
+        </div>
 
         {/* App version */}
         <p style={{
@@ -329,7 +368,7 @@ export default function Sidebar() {
           overflow: 'hidden',
           transition: 'opacity 0.12s',
         }}>
-          Almenara v{pkg.version}
+          Almenara v{pkg.version} · dev
         </p>
       </div>
     </aside>

@@ -81,7 +81,7 @@ export default function Login() {
             }}>
               <AlmenaraMark size={58} tower="var(--gold)" light="var(--gold-light)" pulse />
             </div>
-            <p style={{ color: 'var(--text)', fontWeight: 700, fontSize: '22px', lineHeight: 1, letterSpacing: '6px', textTransform: 'uppercase', margin: 0, fontFamily: "Georgia, 'Palatino Linotype', serif", paddingLeft: '6px' }}>
+            <p style={{ color: 'var(--text)', fontWeight: 700, fontSize: '22px', lineHeight: 1, letterSpacing: '6px', textTransform: 'uppercase', margin: 0, fontFamily: 'var(--font-display)', paddingLeft: '6px' }}>
               Almenara
             </p>
             <p style={{ color: 'var(--gold)', fontSize: '9.5px', letterSpacing: '3.5px', textTransform: 'uppercase', margin: '8px 0 0' }}>
@@ -94,7 +94,7 @@ export default function Login() {
 
           <h1 style={{
             margin: '0 0 4px', fontSize: '19px', fontWeight: 700, color: 'var(--text)',
-            fontFamily: "Georgia, 'Palatino Linotype', 'Book Antiqua', serif", letterSpacing: '-0.2px',
+            fontFamily: 'var(--font-display)', letterSpacing: '-0.2px',
           }}>
             Bienvenido de vuelta
           </h1>

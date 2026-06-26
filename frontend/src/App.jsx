@@ -8,6 +8,7 @@ import api from './services/api'
 import Sidebar from './components/layout/Sidebar'
 import ConfirmDialog from './components/ui/ConfirmDialog'
 import ErrorCenter from './components/ui/ErrorCenter'
+import DevBanner from './components/layout/DevBanner'
 import Login from './features/auth/Login'
 import Overview from './features/overview/Overview'
 import Inbox from './features/inbox/Inbox'
@@ -18,6 +19,8 @@ import Knowledge from './features/knowledge/Knowledge'
 import Integrations from './features/integrations/Integrations'
 import Settings from './features/settings/Settings'
 import WidgetTest from './features/widget/WidgetTest'
+import Operator from './features/operator/Operator'
+import Activate from './features/auth/Activate'
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
 const POLL_MS  = 30_000
@@ -130,6 +133,14 @@ function Guard({ perm, children }) {
   return children
 }
 
+// Operator console is superuser-only.
+function OperatorGuard({ children }) {
+  const loaded = useMe(s => s.loaded)
+  const isSuperuser = useMe(s => s.isSuperuser)
+  if (!loaded) return null
+  return isSuperuser ? children : <Navigate to="/" replace />
+}
+
 function PrivateLayout() {
   useNotificationPoller()
   const loadMe = useMe(s => s.loadMe)
@@ -137,11 +148,12 @@ function PrivateLayout() {
   useEffect(() => { loadMe() }, [loadMe])
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100%', overflow: 'hidden', background: 'var(--sand)' }}>
+    <div style={{ display: 'flex', height: '100vh', width: '100%', overflow: 'hidden', background: 'var(--canvas)' }}>
       <ConfirmDialog />
       <ErrorCenter />
       <Sidebar />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0, minHeight: 0 }}>
+        <DevBanner />
         <Routes>
           <Route path="/"             element={<Guard perm={ROUTE_PERM['/']}><Overview /></Guard>} />
           <Route path="/inbox"        element={<Guard perm={ROUTE_PERM['/inbox']}><Inbox /></Guard>} />
@@ -152,6 +164,7 @@ function PrivateLayout() {
           <Route path="/integrations" element={<Guard perm={ROUTE_PERM['/integrations']}><Integrations /></Guard>} />
           <Route path="/settings"     element={<Guard perm={ROUTE_PERM['/settings']}><Settings /></Guard>} />
           <Route path="/widget-test"  element={<Guard perm={ROUTE_PERM['/widget-test']}><WidgetTest /></Guard>} />
+          <Route path="/operador"     element={<OperatorGuard><Operator /></OperatorGuard>} />
         </Routes>
       </div>
     </div>
@@ -164,6 +177,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/activar/:token" element={<Activate />} />
         <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} />
         <Route path="/*"     element={isAuthenticated ? <PrivateLayout />    : <Navigate to="/login" replace />} />
       </Routes>

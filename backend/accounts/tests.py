@@ -40,9 +40,11 @@ def channel(db):
 @pytest.mark.django_db
 class TestWorkspace:
     def test_solo_creates_singleton(self):
+        # Per-org now: get_solo() resolves to the current org's single workspace.
         a = Workspace.get_solo()
         b = Workspace.get_solo()
-        assert a.pk == b.pk == 1
+        assert a.pk == b.pk
+        assert a.organization_id == b.organization_id is not None
 
     def test_tier_thresholds_are_used(self):
         ws = Workspace.get_solo()
@@ -253,3 +255,29 @@ class TestReassign:
         assert conv.assigned_to_id == agent.id
         assert conv.assigned_at is not None
         assert SLAAlert.objects.filter(conversation=conv, resolved=False).count() == 0
+
+
+@pytest.mark.django_db
+class TestOverview:
+    def test_overview_returns_real_org_kpis(self, admin_client):
+        ch = Channel.objects.create(name='Web', type='website')
+        c1 = Contact.objects.create(name='Ana', channel=ch)
+        c2 = Contact.objects.create(name='Beto', channel=ch)
+        # One AI-handled conversation, one escalated to a human.
+        conv_ai = Conversation.objects.create(channel=ch, contact=c1, status='active')
+        conv_h = Conversation.objects.create(channel=ch, contact=c2, status='human_takeover')
+        Message.objects.create(conversation=conv_ai, role='customer', content='hola')
+        Message.objects.create(conversation=conv_ai, role='ai', content='¡hola!')
+
+        r = admin_client.get('/api/accounts/overview/')
+        assert r.status_code == 200
+        d = r.json()
+        assert d['headline']['conversations_total'] == 2
+        assert d['headline']['human_active'] == 1
+        assert d['headline']['messages_today'] == 2
+        # 2 convs, 1 handoff → 50% containment.
+        assert d['headline']['ai_containment_rate'] == 50
+        web = next((c for c in d['channels'] if c['type'] == 'website'), None)
+        assert web is not None and web['total'] == 2 and web['today'] == 2
+        assert len(d['series']['days']) == 7
+        assert 'by_stage' in d['leads']

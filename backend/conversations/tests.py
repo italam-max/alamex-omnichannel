@@ -1,7 +1,7 @@
 import pytest
 from django.contrib.auth.models import User
 from rest_framework.test import APIClient
-from conversations.models import Channel
+from conversations.models import Channel, Contact, Conversation
 from conversations.serializers import ChannelSerializer, SECRET_FIELDS
 
 
@@ -95,3 +95,77 @@ class TestChannelViewSet:
         assert response.status_code == 200
         whatsapp_channel.refresh_from_db()
         assert whatsapp_channel.credentials['access_token'] == 'real_token'
+
+
+# ── Conversation update validation (hardening) ────────────────────
+
+@pytest.fixture
+def conversation(db, whatsapp_channel):
+    from conversations.models import Contact, Conversation
+    contact = Contact.objects.create(name='Cliente', channel=whatsapp_channel)
+    return Conversation.objects.create(
+        channel=whatsapp_channel, contact=contact, status='active', ai_active=True)
+
+
+@pytest.mark.django_db
+class TestConversationUpdateValidation:
+    def _url(self, conv):
+        return f'/api/conversations/{conv.id}/update/'
+
+    def test_rejects_invalid_status(self, api_client, conversation):
+        r = api_client.patch(self._url(conversation), {'status': 'bogus'}, format='json')
+        assert r.status_code == 400
+        conversation.refresh_from_db()
+        assert conversation.status == 'active'  # unchanged
+
+    def test_accepts_valid_status(self, api_client, conversation):
+        r = api_client.patch(self._url(conversation), {'status': 'human_takeover'}, format='json')
+        assert r.status_code == 200
+        conversation.refresh_from_db()
+        assert conversation.status == 'human_takeover'
+
+    def test_coerces_ai_active_string(self, api_client, conversation):
+        r = api_client.patch(self._url(conversation), {'ai_active': 'false'}, format='json')
+        assert r.status_code == 200
+        conversation.refresh_from_db()
+        assert conversation.ai_active is False
+
+    def test_empty_payload_rejected(self, api_client, conversation):
+        r = api_client.patch(self._url(conversation), {'foo': 'bar'}, format='json')
+        assert r.status_code == 400
+
+
+@pytest.mark.django_db
+class TestHealthCheck:
+    def test_health_ok_with_db(self):
+        client = APIClient()  # unauthenticated — probe must be public
+        r = client.get('/api/health/')
+        assert r.status_code == 200
+        assert r.json()['status'] == 'ok'
+        assert r.json()['database'] == 'up'
+
+
+@pytest.mark.django_db
+class TestSuperuserClaim:
+    """A platform owner (superuser) usually has no Agent row, but must still be
+    able to work the inbox — claiming auto-provisions their Agent profile."""
+
+    def test_superuser_without_agent_profile_can_claim(self, org):
+        from accounts.models import Agent
+        su = User.objects.create_superuser(username='owner', email='o@x.mx', password='x')
+        ch = Channel.objects.create(name='Web', type='website', organization=org)
+        contact = Contact.objects.create(name='Cliente', channel=ch, organization=org)
+        conv = Conversation.objects.create(
+            channel=ch, contact=contact, status='human_takeover',
+            ai_active=True, assigned_to=None, organization=org)
+        assert not Agent.objects.filter(user=su).exists()  # no profile yet
+
+        client = APIClient(); client.force_authenticate(user=su)
+        r = client.post(f'/api/conversations/{conv.id}/claim/')
+
+        assert r.status_code == 200
+        agent = Agent.objects.get(user=su)            # auto-provisioned
+        assert agent.organization_id == org.id
+        conv.refresh_from_db()
+        assert conv.assigned_to_id == agent.id        # actually assigned
+        assert conv.ai_active is False

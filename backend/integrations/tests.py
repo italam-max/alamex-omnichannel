@@ -257,3 +257,28 @@ class TestWidgetMessageView:
         resp = self._post('web_testkey123', {'message': 'Hack', 'session_id': 'fakeid999'})
         assert resp.status_code == 200
         assert resp.data['session_id'] != 'fakeid999'
+
+
+@pytest.mark.django_db
+class TestWidgetConfigView:
+    """The public config endpoint backs the in-app tester. A website widget is
+    only reachable while the channel is active — hence new website channels must
+    be created active, or the tester 404s right after creation."""
+
+    def _get(self, key):
+        from integrations.widget import WidgetConfigView
+        request = RequestFactory().get(f'/api/integrations/widget/{key}/config/')
+        return WidgetConfigView.as_view()(request, widget_key=key)
+
+    def test_active_widget_returns_config(self):
+        Channel.objects.create(name='Web', type='website', is_active=True,
+                               credentials={'widget_key': 'web_active'})
+        resp = self._get('web_active')
+        assert resp.status_code == 200
+        assert 'greeting_message' in resp.data
+
+    def test_inactive_widget_returns_404(self):
+        Channel.objects.create(name='Web', type='website', is_active=False,
+                               credentials={'widget_key': 'web_inactive'})
+        resp = self._get('web_inactive')
+        assert resp.status_code == 404

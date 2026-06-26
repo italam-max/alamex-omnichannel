@@ -5,13 +5,21 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.conf import settings
 
+from accounts.tenancy import TenantScopedViewSet, org_for_request
 from .models import Channel, Contact, Conversation, Message
 from .serializers import ChannelSerializer, ContactSerializer, ConversationSerializer, MessageSerializer
 
 GRAPH_URL = "https://graph.facebook.com/v21.0"
 
 
-class ChannelViewSet(viewsets.ModelViewSet):
+def _coerce_bool(value) -> bool:
+    """Accept real bools or common truthy strings ('true', '1', 'yes', 'on')."""
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ('true', '1', 'yes', 'on')
+
+
+class ChannelViewSet(TenantScopedViewSet, viewsets.ModelViewSet):
     queryset = Channel.objects.all().order_by('id')
     serializer_class = ChannelSerializer
     permission_classes = [IsAuthenticated]
@@ -69,13 +77,13 @@ class ChannelViewSet(viewsets.ModelViewSet):
             return Response({'ok': False, 'detail': str(e)}, status=status.HTTP_502_BAD_GATEWAY)
 
 
-class ContactViewSet(viewsets.ReadOnlyModelViewSet):
+class ContactViewSet(TenantScopedViewSet, viewsets.ReadOnlyModelViewSet):
     queryset = Contact.objects.select_related('channel').all()
     serializer_class = ContactSerializer
     permission_classes = [IsAuthenticated]
 
 
-class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
+class ConversationViewSet(TenantScopedViewSet, viewsets.ReadOnlyModelViewSet):
     queryset = (Conversation.objects
                 .select_related('channel', 'contact', 'assigned_to')
                 .prefetch_related('messages')
@@ -102,18 +110,60 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
 
         if params.get('status'):
             qs = qs.filter(status=params['status'])
-        return qs
+        return self.scope_to_org(qs)
 
     @action(detail=True, methods=['patch'], url_path='update')
     def partial_update_conversation(self, request, pk=None):
-        """Allow toggling ai_active and updating status from the Inbox."""
+        """Toggle ai_active and/or update status from the Inbox (validated)."""
         conversation = self.get_object()
-        allowed_fields = {'ai_active', 'status'}
-        data = {k: v for k, v in request.data.items() if k in allowed_fields}
-        for field, value in data.items():
+        updates = {}
+
+        if 'status' in request.data:
+            new_status = request.data['status']
+            valid = {c[0] for c in Conversation.STATUS_CHOICES}
+            if new_status not in valid:
+                return Response(
+                    {'detail': f'status inválido. Opciones: {", ".join(sorted(valid))}.'},
+                    status=status.HTTP_400_BAD_REQUEST)
+            updates['status'] = new_status
+
+        if 'ai_active' in request.data:
+            updates['ai_active'] = _coerce_bool(request.data['ai_active'])
+
+        if not updates:
+            return Response(
+                {'detail': 'Nada que actualizar. Campos permitidos: status, ai_active.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        for field, value in updates.items():
             setattr(conversation, field, value)
-        conversation.save(update_fields=list(data.keys()))
+        conversation.save(update_fields=list(updates.keys()) + ['updated_at'])
         return Response(ConversationSerializer(conversation).data)
+
+    def _acting_agent(self, request, organization=None):
+        """Resolve the Agent acting on behalf of the request.
+
+        A superuser (platform owner) typically has no Agent row but still needs
+        to work the inbox; auto-provision one bound to the relevant organization
+        so claiming/assigning actually works instead of failing with a 403."""
+        profile = getattr(request.user, 'agent_profile', None)
+        if profile:
+            return profile
+        if request.user.is_superuser:
+            from accounts.models import Agent
+            org = organization or org_for_request(request)
+            if org is None:
+                return None
+            profile, _ = Agent.objects.get_or_create(
+                user=request.user,
+                defaults={
+                    'role': 'admin',
+                    'organization': org,
+                    'display_name': request.user.get_username(),
+                },
+            )
+            return profile
+        return None
 
     @action(detail=True, methods=['post'], url_path='claim')
     def claim(self, request, pk=None):
@@ -121,7 +171,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         from django.utils import timezone
         from accounts.models import SLAAlert
         conversation = self.get_object()
-        profile = getattr(request.user, 'agent_profile', None)
+        profile = self._acting_agent(request, conversation.organization)
         if not profile:
             return Response({'detail': 'Solo un agente puede tomar conversaciones.'},
                             status=status.HTTP_403_FORBIDDEN)
@@ -158,6 +208,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
             conversation=conversation,
             role='agent',
             content=content,
+            organization=conversation.organization,
         )
         # Replying clears any open SLA alert — the customer is no longer waiting.
         from accounts.models import SLAAlert
@@ -165,7 +216,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(MessageSerializer(msg).data, status=status.HTTP_201_CREATED)
 
 
-class MessageViewSet(viewsets.ReadOnlyModelViewSet):
+class MessageViewSet(TenantScopedViewSet, viewsets.ReadOnlyModelViewSet):
     queryset = Message.objects.select_related('conversation').all()
     serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated]

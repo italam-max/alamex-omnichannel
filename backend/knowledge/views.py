@@ -3,6 +3,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 
 from accounts.permissions import IsAdmin
+from accounts.tenancy import TenantScopedViewSet, org_for_request
 from .models import KnowledgeDoc, AIConfig, CustomTool, CustomToolRun
 from .serializers import (
     KnowledgeDocSerializer, AIConfigSerializer,
@@ -10,13 +11,13 @@ from .serializers import (
 )
 
 
-class KnowledgeDocViewSet(viewsets.ModelViewSet):
+class KnowledgeDocViewSet(TenantScopedViewSet, viewsets.ModelViewSet):
     queryset = KnowledgeDoc.objects.all().order_by('order', 'created_at')
     serializer_class = KnowledgeDocSerializer
     permission_classes = [IsAdmin]
 
 
-class CustomToolViewSet(viewsets.ModelViewSet):
+class CustomToolViewSet(TenantScopedViewSet, viewsets.ModelViewSet):
     """CRUD for tenant-defined agent tools, plus the operator review action."""
     queryset = CustomTool.objects.all()
     serializer_class = CustomToolSerializer
@@ -44,8 +45,8 @@ class CustomToolViewSet(viewsets.ModelViewSet):
 @api_view(['GET', 'PUT', 'PATCH'])
 @permission_classes([IsAdmin])
 def ai_config_view(request):
-    """Singleton — GET returns it, PUT/PATCH updates it (always pk=1)."""
-    config = AIConfig.get_solo()
+    """Per-org AI persona/config. GET returns it, PUT/PATCH updates it."""
+    config = AIConfig.get_for_org(org_for_request(request))
 
     if request.method == 'GET':
         return Response(AIConfigSerializer(config).data)

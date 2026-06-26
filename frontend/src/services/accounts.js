@@ -1,5 +1,11 @@
 import api from './api'
 
+// ── Overview / command center KPIs ──────────────────────────────────
+export async function getOverview() {
+  const { data } = await api.get('/accounts/overview/')
+  return data
+}
+
 // ── Workspace (business rules) ──────────────────────────────────────
 export async function getWorkspace() {
   const { data } = await api.get('/accounts/workspace/')

@@ -64,7 +64,7 @@ function History({ log, onClear, onClose }) {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
-        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text)', fontFamily: "Georgia, serif" }}>
+        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text)', fontFamily: 'var(--font-display)' }}>
           Historial de incidencias
         </span>
         <div style={{ display: 'flex', gap: '6px' }}>

@@ -9,15 +9,90 @@ Nothing here is hardcoded into business logic — SLA thresholds, escalation
 email, dashboard alerts and the relevance/anti-spam gate all live in Workspace
 and are edited from the admin UI.
 """
+import secrets
+from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
+from .tenancy import TenantOwned
+
+
+# ── Organization: the tenant ──────────────────────────────────────────────────
+
+class Organization(models.Model):
+    """A client tenant. All tenant-owned rows carry an `organization` FK."""
+    name       = models.CharField(max_length=200)
+    slug       = models.SlugField(max_length=80, unique=True)
+    is_active  = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class Membership(models.Model):
+    """Links a user to an organization with an org-scoped role. By current
+    product rule one user has exactly one membership, but the model allows
+    more without rework."""
+    ROLE_CHOICES = [
+        ('admin', 'Administrador'),
+        ('supervisor', 'Supervisor'),
+        ('agent', 'Agente'),
+    ]
+    user         = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='memberships')
+    organization = models.ForeignKey(
+        'accounts.Organization', on_delete=models.CASCADE, related_name='memberships')
+    role         = models.CharField(max_length=12, choices=ROLE_CHOICES, default='agent')
+    is_default   = models.BooleanField(default=True)
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('user', 'organization')]
+
+    def __str__(self):
+        return f'{self.user} @ {self.organization} ({self.role})'
+
+
+class AccessInvite(models.Model):
+    """A one-time, expiring access link issued by the operator. The invited user
+    follows the link to set their password and enter their organization."""
+    organization = models.ForeignKey(
+        'accounts.Organization', on_delete=models.CASCADE, related_name='invites')
+    user        = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='access_invites')
+    email       = models.EmailField()
+    token       = models.CharField(max_length=64, unique=True, db_index=True)
+    created_at  = models.DateTimeField(auto_now_add=True)
+    expires_at  = models.DateTimeField()
+    accepted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    @classmethod
+    def issue(cls, organization, user, days=14):
+        """Create a fresh invite, invalidating any prior unused ones."""
+        cls.objects.filter(user=user, accepted_at__isnull=True).delete()
+        return cls.objects.create(
+            organization=organization, user=user, email=user.email or user.username,
+            token=secrets.token_urlsafe(32),
+            expires_at=timezone.now() + timedelta(days=days),
+        )
+
+    @property
+    def is_valid(self) -> bool:
+        return self.accepted_at is None and timezone.now() < self.expires_at
 
 
 # ── Workspace: the configurable business-rules record ─────────────────────────
 
-class Workspace(models.Model):
+class Workspace(TenantOwned):
     """Singleton (pk=1). Holds every per-company business rule."""
 
     company_name = models.CharField(max_length=200, default='Mi Empresa')
@@ -59,14 +134,29 @@ class Workspace(models.Model):
 
     class Meta:
         verbose_name = 'Workspace (reglas de negocio)'
+        constraints = [
+            models.UniqueConstraint(fields=['organization'], name='uniq_workspace_org'),
+        ]
 
     def __str__(self):
         return f'Workspace: {self.company_name}'
 
     @classmethod
-    def get_solo(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
+    def get_for_org(cls, organization):
+        obj, _ = cls.objects.get_or_create(organization=organization)
         return obj
+
+    @classmethod
+    def get_solo(cls):
+        # Per-org singleton. Requires an organization context — raises rather than
+        # silently returning another tenant's row (defense in depth). Every real
+        # caller runs inside a request (TenantScopedViewSet) or `use_organization`.
+        from .tenancy import get_current_organization, TenantContextMissing
+        org = get_current_organization()
+        if org is None:
+            raise TenantContextMissing(
+                f'{cls.__name__}.get_solo() called without an organization context.')
+        return cls.get_for_org(org)
 
     def tier_for_wait(self, wait_minutes: int) -> str:
         """Map an elapsed wait (minutes) to an SLA tier name."""
@@ -81,7 +171,7 @@ class Workspace(models.Model):
 
 # ── Agent: a human team member ────────────────────────────────────────────────
 
-class Agent(models.Model):
+class Agent(TenantOwned):
     ROLE_ADMIN      = 'admin'
     ROLE_SUPERVISOR = 'supervisor'
     ROLE_AGENT      = 'agent'
@@ -156,7 +246,7 @@ class Agent(models.Model):
 
 # ── SLAAlert: an escalation event ─────────────────────────────────────────────
 
-class SLAAlert(models.Model):
+class SLAAlert(TenantOwned):
     LEVEL_CHOICES = [
         ('warning',   'Aviso'),
         ('critical',  'Crítico'),

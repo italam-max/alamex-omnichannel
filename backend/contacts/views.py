@@ -2,23 +2,24 @@ from rest_framework import viewsets, status as drf_status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from accounts.tenancy import TenantScopedViewSet
 from .models import Lead, FollowUp
 from .serializers import LeadSerializer, FollowUpSerializer
 
 
-class LeadViewSet(viewsets.ReadOnlyModelViewSet):
+class LeadViewSet(TenantScopedViewSet, viewsets.ReadOnlyModelViewSet):
     queryset = Lead.objects.select_related('contact').all()
     serializer_class = LeadSerializer
     permission_classes = [IsAuthenticated]
 
 
-class FollowUpViewSet(viewsets.ReadOnlyModelViewSet):
+class FollowUpViewSet(TenantScopedViewSet, viewsets.ReadOnlyModelViewSet):
     queryset = FollowUp.objects.select_related('conversation', 'conversation__assigned_to').order_by('-created_at')
     serializer_class = FollowUpSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = super(TenantScopedViewSet, self).get_queryset()
         params = self.request.query_params
         # Agent workspace: only follow-ups on conversations assigned to me.
         if params.get('mine') == 'true':
@@ -27,7 +28,7 @@ class FollowUpViewSet(viewsets.ReadOnlyModelViewSet):
         statuses = params.getlist('status')
         if statuses:
             qs = qs.filter(status__in=statuses)
-        return qs
+        return self.scope_to_org(qs)
 
     @action(detail=True, methods=['patch'], url_path='set-status')
     def set_status(self, request, pk=None):

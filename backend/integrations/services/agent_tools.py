@@ -24,6 +24,27 @@ def _close_thread_connection():
     _close()
 
 
+def _search_docs(query: str, organization) -> str:
+    """Knowledge-base search scoped to an organization (None = unscoped)."""
+    from django.db.models import Q
+    from knowledge.models import KnowledgeDoc
+
+    try:
+        base = KnowledgeDoc.objects.filter(is_active=True)
+        if organization is not None:
+            base = base.filter(organization=organization)
+        docs = base.filter(
+            Q(title__icontains=query) | Q(content__icontains=query)
+        ).order_by('order', 'created_at')[:5]
+        if not docs.exists():
+            docs = base.order_by('order', 'created_at')[:3]
+        if not docs.exists():
+            return "No hay información disponible en la base de conocimiento."
+        return "\n\n".join(f"[{d.title}]\n{d.content}" for d in docs)
+    finally:
+        _close_thread_connection()
+
+
 @tool
 def search_knowledge_base(query: str) -> str:
     """
@@ -31,23 +52,22 @@ def search_knowledge_base(query: str) -> str:
     prices, policies, hours, or any documented topic. ALWAYS call this tool before
     answering factual questions about the business — never guess or invent information.
     """
-    from django.db.models import Q
-    from knowledge.models import KnowledgeDoc
+    from accounts.tenancy import get_current_organization
+    return _search_docs(query, get_current_organization())
 
-    try:
-        docs = KnowledgeDoc.objects.filter(is_active=True).filter(
-            Q(title__icontains=query) | Q(content__icontains=query)
-        ).order_by('order', 'created_at')[:5]
 
-        if not docs.exists():
-            docs = KnowledgeDoc.objects.filter(is_active=True).order_by('order', 'created_at')[:3]
-
-        if not docs.exists():
-            return "No hay información disponible en la base de conocimiento."
-
-        return "\n\n".join(f"[{d.title}]\n{d.content}" for d in docs)
-    finally:
-        _close_thread_connection()
+def make_search_knowledge_base(organization):
+    """Build an org-bound knowledge search tool (org captured in the closure, so
+    it stays correct inside ToolNode worker threads)."""
+    @tool
+    def search_knowledge_base(query: str) -> str:
+        """
+        Search the business knowledge base for information about products, services,
+        prices, policies, hours, or any documented topic. ALWAYS call this tool before
+        answering factual questions about the business — never guess or invent information.
+        """
+        return _search_docs(query, organization)
+    return search_knowledge_base
 
 
 @tool
@@ -88,7 +108,8 @@ def create_lead(
         conv = Conversation.objects.select_related('contact').get(pk=conversation_id)
         lead, created = Lead.objects.get_or_create(
             contact=conv.contact,
-            defaults={"notes": notes, "stage": stage, "owner": ""},
+            defaults={"notes": notes, "stage": stage, "owner": "",
+                      "organization_id": conv.organization_id},
         )
         if not created:
             lead.notes = notes
@@ -127,6 +148,7 @@ def create_followup(
             reason=reason,
             priority=priority,
             status="open",
+            organization_id=conv.organization_id,
         )
         logger.info('[Agent] FollowUp id=%s conv=%s', followup.id, conversation_id)
         return f"Seguimiento agendado (id={followup.id})."
@@ -145,3 +167,13 @@ AGENT_TOOLS = [
     create_lead,
     create_followup,
 ]
+
+
+def core_tools(organization):
+    """The 4 system tools, with knowledge search bound to `organization`."""
+    return [
+        make_search_knowledge_base(organization),
+        handoff_to_human,
+        create_lead,
+        create_followup,
+    ]

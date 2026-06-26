@@ -25,6 +25,8 @@ backend/db.sqlite3
 backend/staticfiles/
 backend/media/
 backend/celerybeat-schedule
+backend/celerybeat-schedule-shm
+backend/celerybeat-schedule-wal
 backend/celerybeat.pid
 
 # Environment variables — NEVER commit real secrets

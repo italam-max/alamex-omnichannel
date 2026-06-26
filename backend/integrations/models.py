@@ -1,8 +1,9 @@
 from django.db import models
+from accounts.tenancy import TenantOwned
 from conversations.models import Contact, Conversation
 
 
-class Integration(models.Model):
+class Integration(TenantOwned):
     TYPE_CHOICES = [
         ('odoo', 'Odoo'),
         ('evolution_api', 'Evolution API'),
@@ -17,7 +18,7 @@ class Integration(models.Model):
         return f"{self.name} ({self.type})"
 
 
-class Quote(models.Model):
+class Quote(TenantOwned):
     STATUS_CHOICES = [
         ('draft', 'Borrador'),
         ('sent', 'Enviada'),

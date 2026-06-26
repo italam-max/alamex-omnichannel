@@ -17,5 +17,13 @@ export default defineConfig([
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
+    rules: {
+      // Nuestro patrón intencional de carga al montar — `useEffect(() => { load() }, [load])`
+      // donde `load` es un useCallback que hace `setLoading(true)` antes del await — es el
+      // caso idiomático de data-fetching-on-mount que la propia doc de React acepta. La regla
+      // (nueva en react-hooks v6) lo marca como error; la dejamos como aviso para no romper CI
+      // ni contorsionar 11 efectos correctos. Sigue visible para no abusarla.
+      'react-hooks/set-state-in-effect': 'warn',
+    },
   },
 ])

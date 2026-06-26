@@ -8,7 +8,16 @@ import { listChannels, createChannel, updateChannel, deleteChannel, testChannel 
 import { confirm } from '../../store/confirm'
 import { reportError } from '../../store/errors'
 
-const WEBHOOK_URL = `${window.location.protocol}//${window.location.hostname}:8000/api/integrations/webhook/meta/`
+// Backend base — same source the API client uses. Falls back to the local
+// Django dev server only when VITE_API_URL is unset (i.e. local development).
+const API_URL = import.meta.env.VITE_API_URL
+  || `${window.location.protocol}//${window.location.hostname}:8000/api`
+// Origin that serves the embeddable widget script (backend root, sans /api).
+const BACKEND_ORIGIN = API_URL.replace(/\/api\/?$/, '')
+
+const WEBHOOK_URL = `${API_URL}/integrations/webhook/meta/`
+const embedSnippet = (widgetKey) =>
+  `<script src="${BACKEND_ORIGIN}/widget.js" data-key="${widgetKey}" defer></script>`
 
 // ── Field definitions per channel type ───────────────────────────
 
@@ -154,9 +163,9 @@ function ChannelModal({ channel, onSave, onClose }) {
               <label className="kb-label">Código para tu sitio web</label>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', background: 'var(--ink)', borderRadius: '8px', padding: '10px 12px' }}>
                 <code style={{ fontSize: '12px', color: 'var(--gold-light)', flex: 1, wordBreak: 'break-all' }}>
-                  {`<script src="${window.location.protocol}//${window.location.hostname}:8000/widget.js" data-key="${creds.widget_key}" defer></script>`}
+                  {embedSnippet(creds.widget_key)}
                 </code>
-                <button onClick={() => navigator.clipboard.writeText(`<script src="${window.location.protocol}//${window.location.hostname}:8000/widget.js" data-key="${creds.widget_key}" defer></script>`)}
+                <button onClick={() => navigator.clipboard.writeText(embedSnippet(creds.widget_key))}
                   style={{ fontSize: '11px', color: 'var(--gold-light)', fontWeight: 600, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer' }}>Copiar</button>
               </div>
               <p className="kb-hint">Pega este código antes de <code style={{ background: 'var(--sand-2)', padding: '0 4px', borderRadius: '4px' }}>&lt;/body&gt;</code> en tu sitio web.</p>
@@ -456,7 +465,11 @@ export default function Integrations() {
       ? { accent_color: '#e7a518', header_title: 'Chatea con nosotros', launcher_position: 'bottom-right' }
       : {}
     try {
-      const created = await createChannel({ name, type, is_active: false, credentials: defaultCreds })
+      // Website widgets work immediately (auto widget_key, no external creds), so
+      // they're created active — otherwise the public config/message endpoints 404
+      // ("Widget not found") and the tester can't load them. Meta channels still
+      // start inactive until their credentials are filled in.
+      const created = await createChannel({ name, type, is_active: type === 'website', credentials: defaultCreds })
       setChannels(cs => [...cs, created])
       setAdding(false)
       setEditing(created)

@@ -41,6 +41,18 @@ class AgentSerializer(serializers.ModelSerializer):
     channel_ids = serializers.PrimaryKeyRelatedField(
         many=True, queryset=Channel.objects.all(), source='channels', required=False)
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Scope the channel choices to the request's organization so an admin
+        # cannot assign (by PK) a channel that belongs to another tenant.
+        request = self.context.get('request')
+        if request is not None and 'channel_ids' in self.fields:
+            from .tenancy import org_for_request
+            org = org_for_request(request)
+            qs = Channel.objects.all()
+            self.fields['channel_ids'].child_relation.queryset = (
+                qs.filter(organization=org) if org is not None else qs.none())
+
     # Write-only credentials for creating the underlying auth user
     new_email     = serializers.EmailField(write_only=True, required=False)
     new_password  = serializers.CharField(write_only=True, required=False, style={'input_type': 'password'})

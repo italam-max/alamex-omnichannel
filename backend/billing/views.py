@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from accounts.permissions import IsAdminStrict
+from accounts.tenancy import org_for_request
 from .models import CreditAccount, CreditTransaction
 from .serializers import CreditAccountSerializer, CreditTransactionSerializer
 
@@ -14,7 +15,7 @@ from .serializers import CreditAccountSerializer, CreditTransactionSerializer
 @permission_classes([IsAdminStrict])
 def account_view(request):
     """GET: full account state. PATCH: update markup/alert_threshold."""
-    account = CreditAccount.get_solo()
+    account = CreditAccount.get_for_org(org_for_request(request))
 
     if request.method == 'GET':
         data = CreditAccountSerializer(account).data
@@ -24,11 +25,17 @@ def account_view(request):
     # PATCH — only billing config fields (not balance)
     allowed = {'markup_multiplier', 'alert_threshold_usd'}
     updates = {k: v for k, v in request.data.items() if k in allowed}
+    if not updates:
+        return Response({'error': 'Campos permitidos: markup_multiplier, alert_threshold_usd.'},
+                        status=status.HTTP_400_BAD_REQUEST)
     for field, value in updates.items():
         try:
-            setattr(account, field, Decimal(str(value)))
+            dec = Decimal(str(value))
         except (InvalidOperation, TypeError):
             return Response({'error': f'Valor inválido para {field}'}, status=status.HTTP_400_BAD_REQUEST)
+        if dec < 0:
+            return Response({'error': f'{field} no puede ser negativo'}, status=status.HTTP_400_BAD_REQUEST)
+        setattr(account, field, dec)
     account.save(update_fields=list(updates.keys()) + ['updated_at'])
     return Response(CreditAccountSerializer(account).data)
 
@@ -45,10 +52,12 @@ def topup_view(request):
         return Response({'error': 'amount_usd debe ser un número positivo'}, status=status.HTTP_400_BAD_REQUEST)
 
     description = (request.data.get('description') or f'Recarga manual').strip()[:300]
+    org = org_for_request(request)
 
     with db_transaction.atomic():
-        account = CreditAccount.objects.select_for_update().get(pk=1) if CreditAccount.objects.exists() \
-            else CreditAccount.get_solo()
+        # Ensure the org's account exists, then lock it — no TOCTOU race.
+        CreditAccount.objects.get_or_create(organization=org)
+        account = CreditAccount.objects.select_for_update().get(organization=org)
         account.balance_usd += amount
         account.save(update_fields=['balance_usd', 'updated_at'])
         tx = CreditTransaction.objects.create(
@@ -56,6 +65,7 @@ def topup_view(request):
             amount_usd=amount,
             balance_after=account.balance_usd,
             description=description,
+            organization=org,
         )
 
     return Response(CreditTransactionSerializer(tx).data, status=status.HTTP_201_CREATED)
@@ -64,8 +74,8 @@ def topup_view(request):
 @api_view(['GET'])
 @permission_classes([IsAdminStrict])
 def transactions_view(request):
-    """Last 50 transactions."""
-    qs = CreditTransaction.objects.all()[:50]
+    """Last 50 transactions for the org."""
+    qs = CreditTransaction.objects.filter(organization=org_for_request(request))[:50]
     return Response(CreditTransactionSerializer(qs, many=True).data)
 
 
@@ -80,7 +90,8 @@ def usage_stats_view(request):
     since = timezone.now() - datetime.timedelta(days=30)
     stats = (
         CreditTransaction.objects
-        .filter(type=CreditTransaction.TYPE_USAGE, created_at__gte=since)
+        .filter(type=CreditTransaction.TYPE_USAGE, created_at__gte=since,
+                organization=org_for_request(request))
         .values('model_used')
         .annotate(
             messages=Count('id'),

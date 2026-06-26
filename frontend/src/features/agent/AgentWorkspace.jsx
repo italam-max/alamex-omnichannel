@@ -10,6 +10,7 @@ import {
   getMyFollowups, setFollowupStatus,
 } from '../../services/conversations'
 import { getMe, getWorkspace, setAvailability } from '../../services/accounts'
+import { reportError } from '../../store/errors'
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -258,7 +259,12 @@ export default function AgentWorkspace() {
   }
 
   const handleClaim = async (conv) => {
-    await claimConversation(conv.id).catch(() => {})
+    try {
+      await claimConversation(conv.id)
+    } catch (e) {
+      reportError(e, 'Tomar conversación')
+      return
+    }
     await load()
     const fresh = await getConversation(conv.id).catch(() => null)
     if (fresh) { setSelected(fresh); setTab('mine') }
@@ -375,7 +381,7 @@ export default function AgentWorkspace() {
               <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: 'var(--gold-vp)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <MessageSquare size={22} style={{ color: 'var(--gold)' }} />
               </div>
-              <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text)', fontFamily: "Georgia, serif" }}>Selecciona una conversación</p>
+              <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text)', fontFamily: 'var(--font-display)' }}>Selecciona una conversación</p>
               <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', maxWidth: '260px' }}>
                 Toma una de la cola "Disponibles" o abre una de tus conversaciones asignadas.
               </p>
@@ -394,12 +400,22 @@ export default function AgentWorkspace() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '7px' }}>
-                  <button onClick={handleRelease} className="btn-outline" style={{ padding: '6px 12px', fontSize: '11px' }} title="Devuelve la conversación a la IA">
-                    <CornerUpLeft size={11} /> Devolver a IA
-                  </button>
-                  <button onClick={handleClose} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '8px', background: 'transparent', color: 'var(--crimson)', border: '1px solid rgba(122,28,42,0.2)', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>
-                    <CheckCircle size={11} /> Cerrar
-                  </button>
+                  {!selected.assigned_to ? (
+                    <button onClick={() => handleClaim(selected)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 14px', borderRadius: '8px', background: 'var(--jade)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 700, boxShadow: '0 0 10px rgba(26,92,58,0.25)' }}
+                      title="Toma esta conversación y asígnatela">
+                      <Hand size={11} /> Tomar conversación
+                    </button>
+                  ) : (
+                    <>
+                      <button onClick={handleRelease} className="btn-outline" style={{ padding: '6px 12px', fontSize: '11px' }} title="Devuelve la conversación a la IA">
+                        <CornerUpLeft size={11} /> Devolver a IA
+                      </button>
+                      <button onClick={handleClose} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '8px', background: 'transparent', color: 'var(--crimson)', border: '1px solid rgba(122,28,42,0.2)', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>
+                        <CheckCircle size={11} /> Cerrar
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
