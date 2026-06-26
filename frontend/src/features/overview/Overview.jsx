@@ -3,19 +3,12 @@ import PageShell from '../../components/layout/PageShell'
 import { getOverview } from '../../services/accounts'
 import { reportError } from '../../store/errors'
 import {
-  MessageSquare, Bot, Users, Hand, Zap, Radio, AlertTriangle,
-  Wallet, TrendingUp, Loader, Activity,
+  MessageSquare, Bot, Users, Hand, Zap, AlertTriangle,
+  TrendingUp, Loader, Activity,
 } from 'lucide-react'
 
 const GOLD = '#C09B3A'
-
-const STAGES = [
-  { key: 'new',       label: 'Nuevo',      color: 'var(--text-muted)' },
-  { key: 'contacted', label: 'Contactado', color: '#3B82F6' },
-  { key: 'qualified', label: 'Calificado', color: GOLD },
-  { key: 'proposal',  label: 'Propuesta',  color: 'var(--jade)' },
-  { key: 'closed',    label: 'Cerrado',    color: '#10B981' },
-]
+const IVORY = '#F6EFDC'
 
 const CHANNEL_DOT = {
   WhatsApp: '#25D366', Instagram: '#E1306C', Messenger: '#0084FF', Web: GOLD,
@@ -31,12 +24,19 @@ const EMPTY = {
   series: { days: [], conversations: [], ai_messages: [] },
 }
 
+const nf = (n) => (n ?? 0).toLocaleString('es-MX')
+function fmtK(n) {
+  n = n ?? 0
+  if (n >= 1000) return `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k`
+  return nf(n)
+}
+
 // ── Radial gauge (AI containment) ───────────────────────────────────
 function Gauge({ pct }) {
   const r = 56, C = 2 * Math.PI * r
   const off = C * (1 - Math.min(100, Math.max(0, pct)) / 100)
   return (
-    <svg width="148" height="148" viewBox="0 0 148 148" role="img" aria-label={`Contención IA ${pct}%`}>
+    <svg width="150" height="150" viewBox="0 0 148 148" role="img" aria-label={`Contención IA ${pct}%`}>
       <defs>
         <linearGradient id="gaugeGrad" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="#E4C463" />
@@ -52,8 +52,8 @@ function Gauge({ pct }) {
         strokeLinecap="round" strokeDasharray={C} strokeDashoffset={off}
         transform="rotate(-90 74 74)" filter="url(#gaugeGlow)"
         style={{ transition: 'stroke-dashoffset 1s cubic-bezier(0.4,0,0.2,1)' }} />
-      <text x="74" y="70" textAnchor="middle" fontFamily="var(--font-display)" fontSize="34"
-        fontWeight="700" fill="#F6EFDC">{pct}<tspan fontSize="16" fill={GOLD}>%</tspan></text>
+      <text x="74" y="70" textAnchor="middle" fontFamily="var(--font-display)" fontSize="36"
+        fontWeight="700" fill={IVORY}>{pct}<tspan fontSize="17" fill={GOLD}>%</tspan></text>
       <text x="74" y="92" textAnchor="middle" fontSize="9.5" letterSpacing="1.5"
         fill="rgba(246,239,220,0.55)">RESUELTO IA</text>
     </svg>
@@ -61,7 +61,7 @@ function Gauge({ pct }) {
 }
 
 // ── Sparkline (area) ────────────────────────────────────────────────
-function Sparkline({ values = [], stroke = GOLD, id }) {
+function Sparkline({ values = [], stroke = GOLD, id, height = 44 }) {
   const W = 100, H = 34
   const data = values.length ? values : [0, 0]
   const max = Math.max(...data, 1)
@@ -73,7 +73,7 @@ function Sparkline({ values = [], stroke = GOLD, id }) {
   const area = `${line} L ${W},${H} L 0,${H} Z`
   const last = pts[pts.length - 1]
   return (
-    <svg width="100%" height="44" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+    <svg width="100%" height={height} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
       <defs>
         <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={stroke} stopOpacity="0.28" />
@@ -88,20 +88,49 @@ function Sparkline({ values = [], stroke = GOLD, id }) {
   )
 }
 
-// ── Small pieces ────────────────────────────────────────────────────
-function HeroStat({ icon: Icon, label, value, hint }) {
+// ── Hero pillar (premium, dark ground) ──────────────────────────────
+function Pillar({ icon: Icon, label, value, unit, sub, valueColor = IVORY, border }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-      <div style={{ width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
-        background: 'rgba(192,155,58,0.14)', border: '1px solid rgba(192,155,58,0.28)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Icon size={17} style={{ color: GOLD }} />
-      </div>
-      <div style={{ minWidth: 0 }}>
-        <p style={{ margin: 0, fontSize: '23px', fontWeight: 700, color: '#F6EFDC',
-          fontFamily: 'var(--font-display)', letterSpacing: '-0.5px', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{value}</p>
-        <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'rgba(246,239,220,0.55)' }}>{label}{hint ? ` · ${hint}` : ''}</p>
-      </div>
+    <div style={{
+      position: 'relative', zIndex: 1,
+      paddingLeft: border ? '28px' : 0,
+      borderLeft: border ? '1px solid rgba(192,155,58,0.16)' : 'none',
+      display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0,
+    }}>
+      <p style={{ margin: '0 0 12px', fontSize: '10.5px', letterSpacing: '1.4px', textTransform: 'uppercase',
+        color: 'rgba(246,239,220,0.55)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '7px' }}>
+        {Icon && <Icon size={12} style={{ color: GOLD }} />}{label}
+      </p>
+      <p style={{ margin: 0, fontSize: '42px', lineHeight: 0.95, fontWeight: 700, color: valueColor,
+        fontFamily: 'var(--font-display)', letterSpacing: '-1px', fontVariantNumeric: 'tabular-nums' }}>
+        {value}{unit && <span style={{ fontSize: '19px', color: GOLD, marginLeft: '3px' }}>{unit}</span>}
+      </p>
+      {sub && <p style={{ margin: '11px 0 0', fontSize: '11.5px', color: 'rgba(246,239,220,0.6)' }}>{sub}</p>}
+    </div>
+  )
+}
+
+// ── Premium chip (hero row B) ───────────────────────────────────────
+const CHIP_COLOR = { gold: GOLD, jade: '#6FD19B', crimson: '#E8927C', neutral: IVORY }
+function HeroChip({ icon: Icon, label, value, tone = 'neutral', urgent = false, border }) {
+  const c = CHIP_COLOR[tone]
+  return (
+    <div style={{
+      position: 'relative', zIndex: 1,
+      paddingLeft: border ? '22px' : 0,
+      borderLeft: border ? '1px solid rgba(192,155,58,0.14)' : 'none',
+    }}>
+      <p style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: c, lineHeight: 1,
+        fontFamily: 'var(--font-display)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.5px',
+        display: 'flex', alignItems: 'center', gap: '7px' }}>
+        {value}
+        {urgent && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#E8927C',
+          boxShadow: '0 0 7px rgba(232,146,124,0.7)' }} />}
+      </p>
+      <p style={{ margin: '7px 0 0', fontSize: '10.5px', letterSpacing: '0.6px', color: 'rgba(246,239,220,0.55)',
+        textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        {Icon && <Icon size={11} style={{ color: 'rgba(246,239,220,0.4)' }} />}{label}
+      </p>
     </div>
   )
 }
@@ -122,34 +151,6 @@ function Panel({ title, icon: Icon, children, action }) {
   )
 }
 
-function OpChip({ icon: Icon, label, value, tone = 'neutral', urgent = false }) {
-  const tones = {
-    neutral: { c: 'var(--text)', bg: 'var(--sand)', i: 'var(--text-muted)' },
-    jade:    { c: 'var(--jade)', bg: 'var(--jade-pale)', i: 'var(--jade)' },
-    gold:    { c: 'var(--gold)', bg: 'var(--gold-vp)', i: GOLD },
-    crimson: { c: 'var(--crimson)', bg: 'var(--crimson-pale)', i: 'var(--crimson)' },
-  }
-  const t = tones[tone]
-  return (
-    <div style={{ flex: '1 1 150px', display: 'flex', alignItems: 'center', gap: '11px',
-      background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '13px 15px' }}>
-      <div style={{ width: '34px', height: '34px', borderRadius: '9px', background: t.bg, flexShrink: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-        <Icon size={15} style={{ color: t.i }} />
-        {urgent && <span style={{ position: 'absolute', top: '-3px', right: '-3px', width: '9px', height: '9px',
-          borderRadius: '50%', background: 'var(--crimson)', border: '2px solid var(--surface)' }} />}
-      </div>
-      <div>
-        <p style={{ margin: 0, fontSize: '19px', fontWeight: 700, color: t.c,
-          fontFamily: 'var(--font-display)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{value}</p>
-        <p style={{ margin: '3px 0 0', fontSize: '10.5px', color: 'var(--text-muted)' }}>{label}</p>
-      </div>
-    </div>
-  )
-}
-
-const nf = (n) => (n ?? 0).toLocaleString('es-MX')
-
 export default function Overview() {
   const [d, setD] = useState(EMPTY)
   const [loading, setLoading] = useState(true)
@@ -168,10 +169,11 @@ export default function Overview() {
 
   useEffect(() => { load() }, [load])
 
-  const h = d.headline, ai = d.ai, ops = d.ops, leads = d.leads
+  const h = d.headline, ai = d.ai, ops = d.ops
   const chTotal = d.channels.reduce((s, c) => s + c.count, 0) || 1
-  const aiShare = ai.ai_messages_7d + ai.customer_messages_7d
-    ? Math.round(ai.ai_messages_7d / (ai.ai_messages_7d + ai.customer_messages_7d) * 100) : 0
+  const msgTotal = ai.ai_messages_7d + ai.customer_messages_7d
+  const aiShare = msgTotal ? Math.round(ai.ai_messages_7d / msgTotal * 100) : 0
+  const balColor = d.credits.low ? '#E8927C' : IVORY
 
   if (loading) {
     return (
@@ -186,33 +188,40 @@ export default function Overview() {
 
   return (
     <PageShell title="Centro de mando" subtitle="Tu operación omnicanal en tiempo real">
-      {/* ── Hero: el faro — contención de IA + titulares ── */}
+      {/* ── Hero premium: pilares + franja de KPIs (un solo bloque) ── */}
       <div style={{
         background: 'linear-gradient(135deg, #0C1A2E 0%, #0B1728 60%, #091320 100%)',
         border: '1px solid rgba(192,155,58,0.22)', borderRadius: '18px',
-        padding: '24px 28px', marginBottom: '16px', position: 'relative', overflow: 'hidden',
-        display: 'grid', gridTemplateColumns: 'auto 1px 1fr', gap: '28px', alignItems: 'center',
+        padding: '26px 30px', marginBottom: '16px', position: 'relative', overflow: 'hidden',
       }}>
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
-          background: 'radial-gradient(420px 200px at 12% 0%, rgba(192,155,58,0.16), transparent 70%)' }} />
+          background: 'radial-gradient(480px 240px at 10% 0%, rgba(192,155,58,0.16), transparent 70%)' }} />
 
-        {/* Gauge */}
-        <div style={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
-          <Gauge pct={h.ai_containment_rate} />
-          <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'rgba(246,239,220,0.6)' }}>
-            últimos 7 días · {nf(ai.handoffs_7d)} a humano de {nf(ai.conversations_7d)}
-          </p>
+        {/* Fila A — anclas grandes */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr', gap: '30px', alignItems: 'center' }}>
+          <div style={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
+            <Gauge pct={h.ai_containment_rate} />
+            <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'rgba(246,239,220,0.6)' }}>
+              7 días · {nf(ai.handoffs_7d)} a humano de {nf(ai.conversations_7d)}
+            </p>
+          </div>
+          <Pillar border label="Saldo disponible" value={`$${d.credits.balance_usd}`} valueColor={balColor}
+            sub={d.credits.low ? `⚠ Saldo bajo · gasto 7d $${ai.cost_7d}` : `Gasto 7 días · $${ai.cost_7d}`} />
+          <Pillar border label="Conversaciones hoy" value={nf(h.conversations_today)}
+            sub={`${nf(h.conversations_total)} históricas`} />
+          <Pillar border label="Mensajes hoy" value={nf(h.messages_today)} sub="Todos los canales" />
         </div>
 
-        <div style={{ background: 'rgba(192,155,58,0.18)', width: '1px', height: '100%' }} />
+        {/* Divisor */}
+        <div style={{ height: '1px', background: 'rgba(192,155,58,0.16)', margin: '24px 0 20px', position: 'relative', zIndex: 1 }} />
 
-        {/* Headline stats 2×2 */}
-        <div style={{ position: 'relative', zIndex: 1, display: 'grid',
-          gridTemplateColumns: '1fr 1fr', gap: '20px 28px' }}>
-          <HeroStat icon={MessageSquare} label="Conversaciones hoy" value={nf(h.conversations_today)} hint={`${nf(h.conversations_total)} históricas`} />
-          <HeroStat icon={Radio} label="Mensajes hoy" value={nf(h.messages_today)} />
-          <HeroStat icon={Hand} label="En atención humana" value={nf(h.human_active)} />
-          <HeroStat icon={TrendingUp} label="Leads (7 días)" value={nf(h.leads_week)} />
+        {/* Fila B — KPIs operativos (mismo estilo premium) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0', position: 'relative', zIndex: 1 }}>
+          <HeroChip icon={Hand} label="En atención humana" value={nf(h.human_active)} tone={h.human_active > 0 ? 'crimson' : 'neutral'} urgent={h.human_active > 0} />
+          <HeroChip border icon={TrendingUp} label="Leads · 7 días" value={nf(h.leads_week)} tone="jade" />
+          <HeroChip border icon={Users} label="Agentes en línea" value={`${nf(ops.agents_online)}/${nf(ops.agents_total)}`} tone="jade" />
+          <HeroChip border icon={AlertTriangle} label="Alertas SLA" value={nf(ops.sla_open)} tone={ops.sla_open > 0 ? 'crimson' : 'neutral'} urgent={ops.sla_open > 0} />
+          <HeroChip border icon={Zap} label="Seguimientos" value={nf(ops.followups_open)} tone={ops.followups_open > 0 ? 'gold' : 'neutral'} />
         </div>
       </div>
 
@@ -229,8 +238,8 @@ export default function Overview() {
         </Panel>
       </div>
 
-      {/* ── Canales + Pipeline ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+      {/* ── Canales + Salud de la IA ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
         <Panel title="Mezcla de canales" icon={MessageSquare}>
           {d.channels.length === 0 ? (
             <Empty text="Aún no hay conversaciones por canal" />
@@ -258,46 +267,40 @@ export default function Overview() {
           )}
         </Panel>
 
-        <Panel title="Pipeline de leads" icon={TrendingUp}
-          action={leads.value_usd && Number(leads.value_usd) > 0
-            ? <span style={{ fontSize: '11px', color: 'var(--jade)', fontWeight: 600 }}>${nf(Math.round(Number(leads.value_usd)))} en juego</span>
-            : null}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '11px' }}>
-            {STAGES.map(s => {
-              const count = leads.by_stage[s.key] || 0
-              const pct = leads.total ? Math.round(count / leads.total * 100) : 0
-              return (
-                <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: '12px', color: 'var(--text-mid)', width: '78px', flexShrink: 0 }}>{s.label}</span>
-                  <div style={{ flex: 1, height: '6px', background: 'var(--sand-2)', borderRadius: '99px', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${pct}%`, borderRadius: '99px', background: s.color, transition: 'width 0.7s ease' }} />
-                  </div>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text)', width: '28px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{nf(count)}</span>
-                </div>
-              )
-            })}
+        <Panel title="Salud de la IA · 7 días" icon={Bot}>
+          <p style={{ margin: '0 0 8px', fontSize: '12px', color: 'var(--text-mid)', fontWeight: 500 }}>Reparto de mensajes</p>
+          <div style={{ display: 'flex', height: '12px', borderRadius: '99px', overflow: 'hidden', background: 'var(--sand-2)' }}>
+            <div style={{ width: `${aiShare}%`, background: 'var(--jade)', transition: 'width 0.7s ease' }} />
+            <div style={{ width: `${100 - aiShare}%`, background: GOLD, transition: 'width 0.7s ease' }} />
           </div>
-          <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--border)',
-            display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-            <span style={{ color: 'var(--text-muted)' }}>Total de leads</span>
-            <span style={{ fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{nf(leads.total)}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '7px', fontSize: '11px' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--text-mid)' }}>
+              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--jade)' }} /> IA {nf(ai.ai_messages_7d)}
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--text-mid)' }}>
+              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: GOLD }} /> Cliente {nf(ai.customer_messages_7d)}
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginTop: '18px',
+            paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+            <MiniStat label="Escaladas" value={nf(ai.handoffs_7d)} />
+            <MiniStat label="Tokens" value={fmtK(ai.tokens_in_7d + ai.tokens_out_7d)} />
+            <MiniStat label="Costo" value={`$${ai.cost_7d}`} />
           </div>
         </Panel>
       </div>
-
-      {/* ── Operación en vivo ── */}
-      <h2 style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-mid)', margin: '0 0 12px',
-        textTransform: 'uppercase', letterSpacing: '1.2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <Zap size={13} style={{ color: GOLD }} /> Operación en vivo
-      </h2>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-        <OpChip icon={Users} label="Agentes en línea" value={`${nf(ops.agents_online)}/${nf(ops.agents_total)}`} tone="jade" />
-        <OpChip icon={AlertTriangle} label="Alertas SLA abiertas" value={nf(ops.sla_open)} tone={ops.sla_open > 0 ? 'crimson' : 'neutral'} urgent={ops.sla_open > 0} />
-        <OpChip icon={Hand} label="Seguimientos pendientes" value={nf(ops.followups_open)} tone={ops.followups_open > 0 ? 'gold' : 'neutral'} />
-        <OpChip icon={Wallet} label={`Saldo · gasto 7d $${ai.cost_7d}`} value={`$${d.credits.balance_usd}`} tone={d.credits.low ? 'crimson' : 'neutral'} urgent={d.credits.low} />
-      </div>
     </PageShell>
+  )
+}
+
+function MiniStat({ label, value }) {
+  return (
+    <div>
+      <p style={{ margin: 0, fontSize: '19px', fontWeight: 700, color: 'var(--text)',
+        fontFamily: 'var(--font-display)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.3px' }}>{value}</p>
+      <p style={{ margin: '3px 0 0', fontSize: '10.5px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</p>
+    </div>
   )
 }
 
