@@ -87,7 +87,12 @@ def org_for_request(request):
     """Resolve the organization for an authenticated request.
 
     One user = one organization (current product rule). A superuser may target
-    a specific org with the `X-Organization: <slug>` header (operator support)."""
+    a specific org with the `X-Organization: <slug>` header (operator support).
+
+    A SUSPENDED organization (`is_active=False`) never resolves: only active
+    memberships are considered, and a user whose org has been suspended gets an
+    explicit 403 (not silently-empty data) — this is the defense-in-depth half of
+    suspension enforcement; the login view blocks them at the door as well."""
     user = getattr(request, 'user', None)
     if not user or not user.is_authenticated:
         return None
@@ -101,15 +106,18 @@ def org_for_request(request):
             if org:
                 return org
 
-    membership = (Membership.objects.filter(user=user)
-                  .select_related('organization')
-                  .order_by('-is_default', 'id')
-                  .first())
-    if membership:
-        return membership.organization
-    # Fallback to an already-bound org context. In production this is unset
-    # during resolution (so a user without a membership resolves to None and
-    # sees nothing — fail closed); test setup binds a default org here.
+    memberships = Membership.objects.filter(user=user).select_related('organization')
+    active = memberships.filter(organization__is_active=True).order_by('-is_default', 'id').first()
+    if active:
+        return active.organization
+    # The user belongs to an org, but it's suspended → block explicitly and
+    # uniformly across every endpoint (DRF turns this into a clean 403).
+    if memberships.exists():
+        from rest_framework.exceptions import PermissionDenied
+        raise PermissionDenied(
+            'Tu organización está suspendida. Contacta al administrador de la plataforma.')
+    # No membership at all → fail closed (sees nothing). In production the
+    # context is unset here; test setup binds a default org via this fallback.
     return current_organization.get()
 
 

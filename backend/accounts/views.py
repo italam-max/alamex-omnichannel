@@ -78,6 +78,14 @@ class AgentViewSet(TenantScopedViewSet, viewsets.ModelViewSet):
             })
         data = AgentSerializer(profile).data
         data['organization'] = org_data
+        # A superuser must keep operator powers even after an Agent row exists
+        # for them (e.g. auto-provisioned when they claimed a conversation) —
+        # otherwise the operator console would vanish from the sidebar.
+        data['is_superuser'] = request.user.is_superuser
+        if request.user.is_superuser:
+            data['permissions'] = {k: True for k in (
+                'manage_agents', 'configure_rules', 'manage_channels',
+                'view_all_convs', 'reassign', 'view_billing', 'attend_convs')}
         return Response(data)
 
     @action(detail=True, methods=['patch'], url_path='availability')
@@ -171,4 +179,133 @@ class TeamStatsView(viewsets.ViewSet):
             'open_alerts':    SLAAlert.objects.filter(resolved=False, organization=org).count(),
             'escalated':      SLAAlert.objects.filter(resolved=False, level='escalated', organization=org).count(),
             'human_waiting':  Conversation.objects.filter(status='human_takeover', organization=org).count(),
+        })
+
+
+CHANNEL_LABELS = {
+    'whatsapp': 'WhatsApp', 'messenger': 'Messenger',
+    'instagram': 'Instagram', 'website': 'Web',
+}
+_DAY_ES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+
+
+class OverviewView(viewsets.ViewSet):
+    """Real, organization-scoped KPIs for the command-center dashboard.
+
+    Everything here is the caller's own org (resolved via org_for_request) — the
+    headline numbers, the AI containment metric, channel mix, lead pipeline, the
+    live operation state, and a 7-day activity series for the sparklines."""
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        from datetime import timedelta
+        from decimal import Decimal
+        from django.db.models import Sum
+        from django.db.models.functions import TruncDate
+        from billing.models import CreditTransaction, CreditAccount
+        from contacts.models import Lead, FollowUp
+        from conversations.models import Message, Channel
+
+        org = org_for_request(request)
+        now = timezone.now()
+        today = timezone.localdate()
+        week_ago = now - timedelta(days=7)
+        day0 = today - timedelta(days=6)
+
+        convs = Conversation.objects.filter(organization=org)
+        msgs = Message.objects.filter(organization=org)
+
+        # ── Headline ───────────────────────────────────────────────
+        convs_today = convs.filter(created_at__date=today).count()
+        msgs_today = msgs.filter(created_at__date=today).count()
+        human_active = convs.filter(status='human_takeover').count()
+        leads_week = Lead.objects.filter(organization=org, created_at__gte=week_ago).count()
+
+        # ── AI performance (last 7 days) ───────────────────────────
+        convs_7d = convs.filter(created_at__gte=week_ago)
+        total_7d = convs_7d.count()
+        # A conversation "escaped" the AI if a human took over or got assigned.
+        handoffs_7d = convs_7d.filter(
+            Q(status='human_takeover') | Q(assigned_to__isnull=False)).distinct().count()
+        containment = round((total_7d - handoffs_7d) / total_7d * 100) if total_7d else 0
+
+        msgs_7d = msgs.filter(created_at__gte=week_ago)
+        ai_msgs_7d = msgs_7d.filter(role='ai').count()
+        customer_msgs_7d = msgs_7d.filter(role='customer').count()
+
+        usage = (CreditTransaction.objects
+                 .filter(organization=org, type=CreditTransaction.TYPE_USAGE, created_at__gte=week_ago)
+                 .aggregate(tin=Sum('input_tokens'), tout=Sum('output_tokens'), cost=Sum('amount_usd')))
+        cost_7d = abs(usage['cost'] or Decimal('0'))
+
+        acct = CreditAccount.get_for_org(org)
+
+        # ── Channels mix ───────────────────────────────────────────
+        ch_counts = {row['channel__type']: row['n'] for row in
+                     convs.values('channel__type').annotate(n=Count('id'))}
+        channels = [
+            {'type': t, 'label': CHANNEL_LABELS.get(t, t or 'Otro'), 'count': ch_counts.get(t, 0)}
+            for t in ['whatsapp', 'instagram', 'messenger', 'website']
+            if ch_counts.get(t, 0) > 0
+        ]
+
+        # ── Lead pipeline ──────────────────────────────────────────
+        stage_counts = {row['stage']: row['n'] for row in
+                        Lead.objects.filter(organization=org).values('stage').annotate(n=Count('id'))}
+        lead_value = (Lead.objects.filter(organization=org)
+                      .aggregate(v=Sum('value'))['v'] or Decimal('0'))
+
+        # ── Live operation ─────────────────────────────────────────
+        agents = Agent.objects.filter(is_active=True, organization=org)
+
+        # ── 7-day activity series (for sparklines) ─────────────────
+        conv_by_day = {r['d']: r['n'] for r in convs.filter(created_at__date__gte=day0)
+                       .annotate(d=TruncDate('created_at')).values('d').annotate(n=Count('id'))}
+        ai_by_day = {r['d']: r['n'] for r in msgs_7d.filter(role='ai', created_at__date__gte=day0)
+                     .annotate(d=TruncDate('created_at')).values('d').annotate(n=Count('id'))}
+        days, conv_series, ai_series = [], [], []
+        for i in range(7):
+            d = day0 + timedelta(days=i)
+            days.append(_DAY_ES[d.weekday()])
+            conv_series.append(conv_by_day.get(d, 0))
+            ai_series.append(ai_by_day.get(d, 0))
+
+        return Response({
+            'headline': {
+                'conversations_today': convs_today,
+                'conversations_total': convs.count(),
+                'messages_today': msgs_today,
+                'ai_containment_rate': containment,
+                'human_active': human_active,
+                'leads_week': leads_week,
+            },
+            'ai': {
+                'ai_messages_7d': ai_msgs_7d,
+                'customer_messages_7d': customer_msgs_7d,
+                'handoffs_7d': handoffs_7d,
+                'conversations_7d': total_7d,
+                'tokens_in_7d': usage['tin'] or 0,
+                'tokens_out_7d': usage['tout'] or 0,
+                'cost_7d': f'{cost_7d:.4f}',
+            },
+            'credits': {
+                'balance_usd': f'{acct.balance_usd:.2f}',
+                'alert_threshold_usd': f'{acct.alert_threshold_usd:.2f}',
+                'low': acct.balance_usd < acct.alert_threshold_usd * 2,
+            },
+            'channels': channels,
+            'leads': {
+                'by_stage': {s: stage_counts.get(s, 0) for s in
+                             ['new', 'contacted', 'qualified', 'proposal', 'closed']},
+                'total': sum(stage_counts.values()),
+                'value_usd': f'{lead_value:.2f}',
+            },
+            'ops': {
+                'sla_open': SLAAlert.objects.filter(resolved=False, organization=org).count(),
+                'agents_online': agents.filter(availability=Agent.AVAIL_ONLINE).count(),
+                'agents_total': agents.count(),
+                'followups_open': FollowUp.objects.filter(
+                    organization=org, status__in=['open', 'in_progress']).count(),
+            },
+            'series': {'days': days, 'conversations': conv_series, 'ai_messages': ai_series},
         })

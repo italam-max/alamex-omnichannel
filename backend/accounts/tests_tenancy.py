@@ -98,6 +98,23 @@ class TestApiIsolation:
         rows = r.json(); rows = rows.get('results', rows)
         assert len(rows) == 1 and rows[0]['title'] == 'Doc org-a'
 
+    def test_agent_cannot_be_assigned_cross_org_channel(self, two_orgs):
+        a, b = two_orgs
+        b_channel = Channel.objects.filter(organization=b).first()
+        client_a = _client_for(a, 'a_chan')
+        # Org A admin tries to attach org B's channel (by PK) to a new agent.
+        r = client_a.post('/api/accounts/agents/', {
+            'new_email': 'nuevo@org-a.test',
+            'new_password': 'Sup3rSecret!42',
+            'display_name': 'Agente A',
+            'role': 'agent',
+            'channel_ids': [b_channel.id],
+        }, format='json')
+        # The serializer's queryset is scoped to A → B's channel is not a valid choice.
+        assert r.status_code == 400
+        assert 'channel_ids' in r.json()
+        assert not Agent.objects.filter(channels=b_channel).exists()
+
 
 @pytest.mark.django_db
 class TestPipelineIsolation:

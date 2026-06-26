@@ -3,7 +3,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 
 from accounts.permissions import IsAdmin
-from accounts.tenancy import TenantScopedViewSet, org_for_request, use_organization
+from accounts.tenancy import TenantScopedViewSet, org_for_request
 from .models import KnowledgeDoc, AIConfig, CustomTool, CustomToolRun
 from .serializers import (
     KnowledgeDocSerializer, AIConfigSerializer,

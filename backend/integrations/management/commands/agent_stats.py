@@ -108,13 +108,15 @@ class Command(BaseCommand):
             ai_msgs = ai_msgs.filter(conversation__channel_id=channel_id)
         self.stdout.write(f'Mensajes AI:        {ai_msgs.count()}')
 
-        # Balance actual
-        try:
+        # Balance actual — este comando es global (cruza todas las organizaciones),
+        # así que el saldo por-org solo aplica con una organización en contexto.
+        from accounts.tenancy import get_current_organization
+        if get_current_organization() is not None:
             from billing.models import CreditAccount
             acc = CreditAccount.get_solo()
             color = self.style.WARNING if acc.balance_usd < acc.alert_threshold_usd * 2 else self.style.SUCCESS
             self.stdout.write(f'\n{color(f"Balance actual: ${acc.balance_usd:.4f} USD")}')
-        except Exception:
-            pass
+        else:
+            self.stdout.write('\n(Saldo por organización: consúltalo en el panel de Operador)')
 
         self.stdout.write('')

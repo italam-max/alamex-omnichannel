@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Search, MessageSquare, AlertTriangle, X } from 'lucide-react'
+import { Bell, MessageSquare, AlertTriangle, X } from 'lucide-react'
 import { useNotifications } from '../../store/notifications'
 
 const CHANNEL_DOT = {
@@ -215,19 +215,6 @@ export default function Header({ title, subtitle }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-        {/* Search */}
-        <button aria-label="Buscar" style={{
-          width: '32px', height: '32px',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          borderRadius: '8px', border: 'none', background: 'transparent',
-          color: 'var(--text-muted)', cursor: 'pointer', transition: 'background 0.12s',
-        }}
-        onMouseEnter={e => (e.currentTarget.style.background = 'var(--sand)')}
-        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-        >
-          <Search size={15} />
-        </button>
-
         {/* Bell */}
         <div style={{ position: 'relative' }}>
           <button

@@ -8,6 +8,7 @@ import api from './services/api'
 import Sidebar from './components/layout/Sidebar'
 import ConfirmDialog from './components/ui/ConfirmDialog'
 import ErrorCenter from './components/ui/ErrorCenter'
+import DevBanner from './components/layout/DevBanner'
 import Login from './features/auth/Login'
 import Overview from './features/overview/Overview'
 import Inbox from './features/inbox/Inbox'
@@ -152,6 +153,7 @@ function PrivateLayout() {
       <ErrorCenter />
       <Sidebar />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0, minHeight: 0 }}>
+        <DevBanner />
         <Routes>
           <Route path="/"             element={<Guard perm={ROUTE_PERM['/']}><Overview /></Guard>} />
           <Route path="/inbox"        element={<Guard perm={ROUTE_PERM['/inbox']}><Inbox /></Guard>} />

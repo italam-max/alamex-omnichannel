@@ -148,12 +148,15 @@ class Workspace(TenantOwned):
 
     @classmethod
     def get_solo(cls):
-        # Transitional shim: prefer the current-org row; fall back to first row.
-        from .tenancy import get_current_organization
+        # Per-org singleton. Requires an organization context — raises rather than
+        # silently returning another tenant's row (defense in depth). Every real
+        # caller runs inside a request (TenantScopedViewSet) or `use_organization`.
+        from .tenancy import get_current_organization, TenantContextMissing
         org = get_current_organization()
-        if org is not None:
-            return cls.get_for_org(org)
-        return cls.objects.order_by('pk').first() or cls.objects.create()
+        if org is None:
+            raise TenantContextMissing(
+                f'{cls.__name__}.get_solo() called without an organization context.')
+        return cls.get_for_org(org)
 
     def tier_for_wait(self, wait_minutes: int) -> str:
         """Map an elapsed wait (minutes) to an SLA tier name."""

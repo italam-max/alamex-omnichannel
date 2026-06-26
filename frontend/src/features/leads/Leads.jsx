@@ -797,7 +797,10 @@ export default function Leads() {
 
   useEffect(() => { load() }, [load])
 
-  const handleGotoConv = () => navigate('/inbox')
+  const handleGotoConv = (target) => {
+    const convId = target?.conversation?.id ?? target?.id
+    navigate(convId ? `/inbox?conv=${convId}` : '/inbox')
+  }
 
   const handleCloseFollowup = (item) => {
     setFollowups(fs => fs.filter(f => f.id !== item.id))

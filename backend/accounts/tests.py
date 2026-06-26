@@ -255,3 +255,28 @@ class TestReassign:
         assert conv.assigned_to_id == agent.id
         assert conv.assigned_at is not None
         assert SLAAlert.objects.filter(conversation=conv, resolved=False).count() == 0
+
+
+@pytest.mark.django_db
+class TestOverview:
+    def test_overview_returns_real_org_kpis(self, admin_client):
+        ch = Channel.objects.create(name='Web', type='website')
+        c1 = Contact.objects.create(name='Ana', channel=ch)
+        c2 = Contact.objects.create(name='Beto', channel=ch)
+        # One AI-handled conversation, one escalated to a human.
+        conv_ai = Conversation.objects.create(channel=ch, contact=c1, status='active')
+        conv_h = Conversation.objects.create(channel=ch, contact=c2, status='human_takeover')
+        Message.objects.create(conversation=conv_ai, role='customer', content='hola')
+        Message.objects.create(conversation=conv_ai, role='ai', content='¡hola!')
+
+        r = admin_client.get('/api/accounts/overview/')
+        assert r.status_code == 200
+        d = r.json()
+        assert d['headline']['conversations_total'] == 2
+        assert d['headline']['human_active'] == 1
+        assert d['headline']['messages_today'] == 2
+        # 2 convs, 1 handoff → 50% containment.
+        assert d['headline']['ai_containment_rate'] == 50
+        assert any(c['type'] == 'website' for c in d['channels'])
+        assert len(d['series']['days']) == 7
+        assert 'by_stage' in d['leads']

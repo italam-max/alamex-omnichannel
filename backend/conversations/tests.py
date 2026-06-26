@@ -1,7 +1,7 @@
 import pytest
 from django.contrib.auth.models import User
 from rest_framework.test import APIClient
-from conversations.models import Channel
+from conversations.models import Channel, Contact, Conversation
 from conversations.serializers import ChannelSerializer, SECRET_FIELDS
 
 
@@ -143,3 +143,29 @@ class TestHealthCheck:
         assert r.status_code == 200
         assert r.json()['status'] == 'ok'
         assert r.json()['database'] == 'up'
+
+
+@pytest.mark.django_db
+class TestSuperuserClaim:
+    """A platform owner (superuser) usually has no Agent row, but must still be
+    able to work the inbox — claiming auto-provisions their Agent profile."""
+
+    def test_superuser_without_agent_profile_can_claim(self, org):
+        from accounts.models import Agent
+        su = User.objects.create_superuser(username='owner', email='o@x.mx', password='x')
+        ch = Channel.objects.create(name='Web', type='website', organization=org)
+        contact = Contact.objects.create(name='Cliente', channel=ch, organization=org)
+        conv = Conversation.objects.create(
+            channel=ch, contact=contact, status='human_takeover',
+            ai_active=True, assigned_to=None, organization=org)
+        assert not Agent.objects.filter(user=su).exists()  # no profile yet
+
+        client = APIClient(); client.force_authenticate(user=su)
+        r = client.post(f'/api/conversations/{conv.id}/claim/')
+
+        assert r.status_code == 200
+        agent = Agent.objects.get(user=su)            # auto-provisioned
+        assert agent.organization_id == org.id
+        conv.refresh_from_db()
+        assert conv.assigned_to_id == agent.id        # actually assigned
+        assert conv.ai_active is False

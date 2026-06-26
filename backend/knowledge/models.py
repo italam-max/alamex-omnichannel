@@ -69,11 +69,13 @@ class AIConfig(TenantOwned):
 
     @classmethod
     def get_solo(cls):
-        from accounts.tenancy import get_current_organization
+        # Per-org singleton; raises without an org context (defense in depth).
+        from accounts.tenancy import get_current_organization, TenantContextMissing
         org = get_current_organization()
-        if org is not None:
-            return cls.get_for_org(org)
-        return cls.objects.order_by('pk').first() or cls.objects.create()
+        if org is None:
+            raise TenantContextMissing(
+                f'{cls.__name__}.get_solo() called without an organization context.')
+        return cls.get_for_org(org)
 
 
 class CustomTool(TenantOwned):

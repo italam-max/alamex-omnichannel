@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.conf import settings
 
-from accounts.tenancy import TenantScopedViewSet
+from accounts.tenancy import TenantScopedViewSet, org_for_request
 from .models import Channel, Contact, Conversation, Message
 from .serializers import ChannelSerializer, ContactSerializer, ConversationSerializer, MessageSerializer
 
@@ -140,13 +140,38 @@ class ConversationViewSet(TenantScopedViewSet, viewsets.ReadOnlyModelViewSet):
         conversation.save(update_fields=list(updates.keys()) + ['updated_at'])
         return Response(ConversationSerializer(conversation).data)
 
+    def _acting_agent(self, request, organization=None):
+        """Resolve the Agent acting on behalf of the request.
+
+        A superuser (platform owner) typically has no Agent row but still needs
+        to work the inbox; auto-provision one bound to the relevant organization
+        so claiming/assigning actually works instead of failing with a 403."""
+        profile = getattr(request.user, 'agent_profile', None)
+        if profile:
+            return profile
+        if request.user.is_superuser:
+            from accounts.models import Agent
+            org = organization or org_for_request(request)
+            if org is None:
+                return None
+            profile, _ = Agent.objects.get_or_create(
+                user=request.user,
+                defaults={
+                    'role': 'admin',
+                    'organization': org,
+                    'display_name': request.user.get_username(),
+                },
+            )
+            return profile
+        return None
+
     @action(detail=True, methods=['post'], url_path='claim')
     def claim(self, request, pk=None):
         """An agent takes ownership of an unassigned conversation."""
         from django.utils import timezone
         from accounts.models import SLAAlert
         conversation = self.get_object()
-        profile = getattr(request.user, 'agent_profile', None)
+        profile = self._acting_agent(request, conversation.organization)
         if not profile:
             return Response({'detail': 'Solo un agente puede tomar conversaciones.'},
                             status=status.HTTP_403_FORBIDDEN)
