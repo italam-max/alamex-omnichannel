@@ -277,6 +277,7 @@ class TestOverview:
         assert d['headline']['messages_today'] == 2
         # 2 convs, 1 handoff → 50% containment.
         assert d['headline']['ai_containment_rate'] == 50
-        assert any(c['type'] == 'website' for c in d['channels'])
+        web = next((c for c in d['channels'] if c['type'] == 'website'), None)
+        assert web is not None and web['total'] == 2 and web['today'] == 2
         assert len(d['series']['days']) == 7
         assert 'by_stage' in d['leads']

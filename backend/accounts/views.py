@@ -240,13 +240,20 @@ class OverviewView(viewsets.ViewSet):
 
         acct = CreditAccount.get_for_org(org)
 
-        # ── Channels mix ───────────────────────────────────────────
-        ch_counts = {row['channel__type']: row['n'] for row in
-                     convs.values('channel__type').annotate(n=Count('id'))}
+        # ── Channels (dynamic, per connected channel) ──────────────
+        # The hero shows a KPI per channel the org actually has connected
+        # (active), with today's + historical conversation counts.
+        connected = set(Channel.objects.filter(organization=org, is_active=True)
+                        .values_list('type', flat=True))
+        ch_total = {row['channel__type']: row['n'] for row in
+                    convs.values('channel__type').annotate(n=Count('id'))}
+        ch_today = {row['channel__type']: row['n'] for row in
+                    convs.filter(created_at__date=today).values('channel__type').annotate(n=Count('id'))}
         channels = [
-            {'type': t, 'label': CHANNEL_LABELS.get(t, t or 'Otro'), 'count': ch_counts.get(t, 0)}
+            {'type': t, 'label': CHANNEL_LABELS.get(t, t or 'Otro'),
+             'today': ch_today.get(t, 0), 'total': ch_total.get(t, 0)}
             for t in ['whatsapp', 'instagram', 'messenger', 'website']
-            if ch_counts.get(t, 0) > 0
+            if t in connected
         ]
 
         # ── Lead pipeline ──────────────────────────────────────────

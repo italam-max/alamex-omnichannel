@@ -92,7 +92,7 @@ function Sparkline({ values = [], stroke = GOLD, id, height = 44 }) {
 function Pillar({ icon: Icon, label, value, unit, sub, valueColor = IVORY, border }) {
   return (
     <div style={{
-      position: 'relative', zIndex: 1,
+      position: 'relative', zIndex: 1, flex: 1,
       paddingLeft: border ? '28px' : 0,
       borderLeft: border ? '1px solid rgba(192,155,58,0.16)' : 'none',
       display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0,
@@ -106,6 +106,34 @@ function Pillar({ icon: Icon, label, value, unit, sub, valueColor = IVORY, borde
         {value}{unit && <span style={{ fontSize: '19px', color: GOLD, marginLeft: '3px' }}>{unit}</span>}
       </p>
       {sub && <p style={{ margin: '11px 0 0', fontSize: '11.5px', color: 'rgba(246,239,220,0.6)' }}>{sub}</p>}
+    </div>
+  )
+}
+
+// ── Channel pillar (dynamic, brand-colored) ─────────────────────────
+function ChannelPillar({ label, today, total, color, border }) {
+  return (
+    <div style={{
+      position: 'relative', zIndex: 1, flex: 1, minWidth: 0,
+      paddingLeft: border ? '28px' : 0,
+      borderLeft: border ? '1px solid rgba(192,155,58,0.16)' : 'none',
+      display: 'flex', flexDirection: 'column', justifyContent: 'center',
+    }}>
+      <p style={{ margin: '0 0 12px', fontSize: '10.5px', letterSpacing: '1.2px', textTransform: 'uppercase',
+        color: 'rgba(246,239,220,0.6)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '7px',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ width: '9px', height: '9px', borderRadius: '50%', flexShrink: 0, background: color,
+          boxShadow: `0 0 8px ${color}` }} />
+        {label}
+      </p>
+      <p style={{ margin: 0, fontSize: '42px', lineHeight: 0.95, fontWeight: 700, color,
+        fontFamily: 'var(--font-display)', letterSpacing: '-1px', fontVariantNumeric: 'tabular-nums',
+        textShadow: `0 0 22px ${color}55` }}>
+        {nf(today)}
+      </p>
+      <p style={{ margin: '11px 0 0', fontSize: '11.5px', color: 'rgba(246,239,220,0.6)' }}>
+        hoy · {nf(total)} históricas
+      </p>
     </div>
   )
 }
@@ -170,7 +198,8 @@ export default function Overview() {
   useEffect(() => { load() }, [load])
 
   const h = d.headline, ai = d.ai, ops = d.ops
-  const chTotal = d.channels.reduce((s, c) => s + c.count, 0) || 1
+  const mixChannels = d.channels.filter(c => c.total > 0)
+  const chTotal = mixChannels.reduce((s, c) => s + c.total, 0) || 1
   const msgTotal = ai.ai_messages_7d + ai.customer_messages_7d
   const aiShare = msgTotal ? Math.round(ai.ai_messages_7d / msgTotal * 100) : 0
   const balColor = d.credits.low ? '#E8927C' : IVORY
@@ -197,9 +226,9 @@ export default function Overview() {
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
           background: 'radial-gradient(480px 240px at 10% 0%, rgba(192,155,58,0.16), transparent 70%)' }} />
 
-        {/* Fila A — anclas grandes */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr', gap: '30px', alignItems: 'center' }}>
-          <div style={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
+        {/* Fila A — gauge + saldo + KPIs por canal (dinámico) */}
+        <div style={{ display: 'flex', alignItems: 'center', position: 'relative', zIndex: 1 }}>
+          <div style={{ textAlign: 'center', flexShrink: 0, paddingRight: '10px' }}>
             <Gauge pct={h.ai_containment_rate} />
             <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'rgba(246,239,220,0.6)' }}>
               7 días · {nf(ai.handoffs_7d)} a humano de {nf(ai.conversations_7d)}
@@ -207,9 +236,18 @@ export default function Overview() {
           </div>
           <Pillar border label="Saldo disponible" value={`$${d.credits.balance_usd}`} valueColor={balColor}
             sub={d.credits.low ? `⚠ Saldo bajo · gasto 7d $${ai.cost_7d}` : `Gasto 7 días · $${ai.cost_7d}`} />
-          <Pillar border label="Conversaciones hoy" value={nf(h.conversations_today)}
-            sub={`${nf(h.conversations_total)} históricas`} />
-          <Pillar border label="Mensajes hoy" value={nf(h.messages_today)} sub="Todos los canales" />
+          {d.channels.length === 0 ? (
+            <div style={{ flex: 1, paddingLeft: '28px', borderLeft: '1px solid rgba(192,155,58,0.16)' }}>
+              <p style={{ margin: 0, fontSize: '13px', color: 'rgba(246,239,220,0.6)' }}>
+                Conecta un canal para ver sus conversaciones aquí.
+              </p>
+            </div>
+          ) : (
+            d.channels.map(c => (
+              <ChannelPillar key={c.type} border label={c.label} today={c.today} total={c.total}
+                color={CHANNEL_DOT[c.label] || GOLD} />
+            ))
+          )}
         </div>
 
         {/* Divisor */}
@@ -241,12 +279,12 @@ export default function Overview() {
       {/* ── Canales + Salud de la IA ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
         <Panel title="Mezcla de canales" icon={MessageSquare}>
-          {d.channels.length === 0 ? (
+          {mixChannels.length === 0 ? (
             <Empty text="Aún no hay conversaciones por canal" />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {d.channels.map(c => {
-                const pct = Math.round(c.count / chTotal * 100)
+              {mixChannels.map(c => {
+                const pct = Math.round(c.total / chTotal * 100)
                 return (
                   <div key={c.type}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
@@ -254,7 +292,7 @@ export default function Overview() {
                         <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: CHANNEL_DOT[c.label] || GOLD }} />
                         {c.label}
                       </span>
-                      <span style={{ color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{nf(c.count)} · {pct}%</span>
+                      <span style={{ color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{nf(c.total)} · {pct}%</span>
                     </div>
                     <div style={{ height: '7px', background: 'var(--sand-2)', borderRadius: '99px', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${pct}%`, borderRadius: '99px',
